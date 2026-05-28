@@ -1,0 +1,739 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>測地線と Gauss–Bonnet の定理 — 微分幾何デモ</title>
+<style>
+  :root {
+    --bg:#0e1116; --panel:#161b22; --panel2:#1c232d; --border:#2a323d;
+    --text:#d6dde6; --muted:#8b97a6; --accent:#4ea1ff; --accent2:#ffb454; --good:#5ad19a; --bad:#ff6b6b;
+  }
+  * { box-sizing:border-box; }
+  html,body { margin:0; padding:0; height:100%; background:var(--bg); color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,sans-serif; }
+  #app { display:flex; height:100vh; overflow:hidden; }
+  #stage { flex:1; position:relative; min-width:0; }
+  canvas { display:block; width:100%; height:100%; background:radial-gradient(circle at 50% 42%,#131a24 0%,#0e1116 72%); cursor:grab; }
+  canvas:active { cursor:grabbing; }
+  #sidebar { width:330px; flex:0 0 330px; background:var(--panel); border-left:1px solid var(--border);
+    overflow-y:auto; padding:16px 16px 40px; font-size:13px; }
+  h1 { font-size:16px; margin:0 0 2px; }
+  .sub { color:var(--muted); font-size:11px; margin:0 0 14px; line-height:1.5; }
+  .nav { font-size:11px; margin:0 0 12px; }
+  .nav a { color:var(--accent); text-decoration:none; }
+  .nav a:hover { text-decoration:underline; }
+  .group { background:var(--panel2); border:1px solid var(--border); border-radius:10px; padding:12px; margin-bottom:12px; }
+  .group h2 { font-size:12px; margin:0 0 10px; color:var(--accent); font-weight:600; }
+  .btn-row { display:flex; gap:6px; flex-wrap:wrap; }
+  button { background:#233040; color:var(--text); border:1px solid var(--border); border-radius:8px;
+    padding:7px 10px; font-size:12px; cursor:pointer; transition:background .12s,border-color .12s; font-family:inherit; }
+  button:hover { background:#2c3c50; border-color:#3a4a5e; }
+  button.active { background:var(--accent2); color:#2a1c05; border-color:var(--accent2); font-weight:600; }
+  button.wide { flex:1; }
+  .preset-grid { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+  label.row { display:flex; align-items:center; justify-content:space-between; gap:8px; margin:9px 0; }
+  label.row span.lab { color:var(--muted); flex:0 0 auto; }
+  label.row span.val { color:var(--text); font-variant-numeric:tabular-nums; min-width:54px; text-align:right; }
+  input[type=range] { flex:1; accent-color:var(--accent); }
+  .check { display:flex; align-items:center; gap:8px; margin:8px 0; cursor:pointer; }
+  .check input { accent-color:var(--accent); width:15px; height:15px; }
+  #gb { font-variant-numeric:tabular-nums; line-height:1.8; }
+  #gb .m { display:flex; justify-content:space-between; }
+  #gb .m span:first-child { color:var(--muted); }
+  #gb .big { font-size:14px; }
+  #gb .lhs { color:var(--accent2); }
+  #gb .rhs { color:var(--good); }
+  #gb .match { text-align:center; margin-top:8px; font-weight:600; padding:5px; border-radius:7px; }
+  #gb .match.ok { background:rgba(90,209,154,.12); color:var(--good); }
+  #gb .match.no { background:rgba(255,107,107,.12); color:var(--bad); }
+  #status { position:absolute; top:14px; left:16px; font-size:12px; color:var(--muted);
+    background:rgba(14,17,22,.7); padding:6px 10px; border-radius:8px; border:1px solid var(--border);
+    pointer-events:none; backdrop-filter:blur(4px); max-width:60%; line-height:1.5; }
+  #status b { color:var(--accent2); }
+  #hintbar { position:absolute; bottom:12px; left:16px; font-size:11px; color:var(--muted);
+    background:rgba(14,17,22,.6); padding:5px 9px; border-radius:7px; pointer-events:none; }
+  .hint { color:var(--muted); font-size:11px; line-height:1.55; margin-top:6px; }
+  .legend { display:flex; align-items:center; gap:8px; font-size:11px; color:var(--muted); margin-top:8px; }
+  .legend .bar { height:10px; flex:1; border-radius:4px; background:linear-gradient(90deg,#3b82f6,#e5e7eb,#ef4444); }
+  hr.sep { border:none; border-top:1px solid var(--border); margin:10px 0; }
+  code { background:#0e1116; padding:1px 5px; border-radius:4px; color:var(--accent2); font-size:11px; }
+  .formula { background:#0e1116; border:1px solid var(--border); border-radius:8px; padding:9px 10px; font-size:13px; text-align:center; color:var(--text); margin:2px 0 4px; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="stage">
+    <canvas id="cv"></canvas>
+    <div id="status"></div>
+    <div id="hintbar">ドラッグで回転 / ホイールで拡大縮小 / 頂点 A·B·C をドラッグして動かす</div>
+  </div>
+  <div id="sidebar">
+    <h1>測地線と Gauss–Bonnet</h1>
+    <p class="sub">曲面上の「測地線三角形」で局所 Gauss–Bonnet の定理を数値的に確かめます。</p>
+    <p class="nav">▸ <a href="https://nagajin.github.io/differential-geometry-demos/">デモ一覧</a> &nbsp;/&nbsp; <a href="https://nagajin.github.io/mean-curvature-flow/">2D 曲線短縮流</a> &nbsp;/&nbsp; <a href="https://nagajin.github.io/mean-curvature-flow/surface3d.html">3D 平均曲率流</a></p>
+
+    <div class="formula">&#8748;<sub>T</sub> K dA &nbsp;=&nbsp; (&theta;<sub>A</sub>+&theta;<sub>B</sub>+&theta;<sub>C</sub>) &minus; &pi;</div>
+
+    <div class="group">
+      <h2>モード</h2>
+      <div class="btn-row">
+        <button id="mode-tri" class="wide active">測地線三角形</button>
+        <button id="mode-geo" class="wide">測地線シュート</button>
+      </div>
+      <div class="hint" id="mode-hint">3 頂点を結ぶ測地線で三角形を作り、内角の和と曲率積分を比較します。頂点 A·B·C をドラッグできます。</div>
+    </div>
+
+    <div class="group">
+      <h2>曲面</h2>
+      <div class="preset-grid">
+        <button data-surf="sphere">球面 (K&gt;0)</button>
+        <button data-surf="torus">トーラス (K混在)</button>
+        <button data-surf="saddle">鞍面 (K&lt;0)</button>
+        <button data-surf="pseudo">擬球面 (K=&minus;1)</button>
+        <button data-surf="cylinder">円柱 (K=0)</button>
+        <button data-surf="reset">三角形リセット</button>
+      </div>
+    </div>
+
+    <div class="group" id="grp-tri">
+      <h2>Gauss–Bonnet の検証</h2>
+      <div id="gb">
+        <div class="m"><span>内角 &theta;<sub>A</sub></span><span id="gb-a">—</span></div>
+        <div class="m"><span>内角 &theta;<sub>B</sub></span><span id="gb-b">—</span></div>
+        <div class="m"><span>内角 &theta;<sub>C</sub></span><span id="gb-c">—</span></div>
+        <div class="m"><span>内角の和 &Sigma;&theta;</span><span id="gb-sum">—</span></div>
+        <hr class="sep">
+        <div class="m big"><span class="rhs">角度超過 &Sigma;&theta;&minus;&pi;</span><span class="rhs" id="gb-exc">—</span></div>
+        <div class="m big"><span class="lhs">曲率積分 &#8748;K dA</span><span class="lhs" id="gb-int">—</span></div>
+        <div class="match" id="gb-match">—</div>
+      </div>
+      <div class="hint" id="gb-note"></div>
+    </div>
+
+    <div class="group" id="grp-geo" style="display:none">
+      <h2>測地線シュート</h2>
+      <div class="hint">曲面をクリックして出発点を置き、向きと長さを調整します。測地線＝曲面上の「まっすぐな線」です。</div>
+      <label class="row"><span class="lab">向き &phi;</span>
+        <input id="geo-phi" type="range" min="0" max="360" step="1" value="40">
+        <span class="val" id="geo-phi-v">40&deg;</span></label>
+      <label class="row"><span class="lab">長さ L</span>
+        <input id="geo-len" type="range" min="1" max="22" step="0.5" value="9">
+        <span class="val" id="geo-len-v">9.0</span></label>
+      <div class="hint">球面では大円（最短経路）、円柱では螺旋、トーラスや擬球面では複雑に巻きつく様子が見えます。</div>
+    </div>
+
+    <div class="group">
+      <h2>表示</h2>
+      <label class="check"><input type="checkbox" id="opt-curv" checked> ガウス曲率 K を色で表示</label>
+      <label class="check"><input type="checkbox" id="opt-fill" checked> 三角形の領域を塗る</label>
+      <label class="check"><input type="checkbox" id="opt-wire"> ワイヤーフレーム</label>
+      <label class="check"><input type="checkbox" id="opt-spin"> 自動回転</label>
+      <div class="legend"><span>負(鞍)</span><div class="bar"></div><span>正(凸)</span></div>
+    </div>
+
+    <div class="group">
+      <h2>この定理について</h2>
+      <div class="hint">
+        測地三角形 T では局所 Gauss–Bonnet の定理より<br>
+        <code>&#8748;<sub>T</sub> K dA = (&Sigma; 内角) &minus; &pi;</code><br>
+        が成り立ちます（辺が測地線なので測地的曲率の寄与は 0）。曲率 K が正なら内角の和は &pi; を超え（球面）、負なら不足し（鞍面）、K=0 の円柱では平面と同じく和はちょうど &pi; です。トーラスでは正負が打ち消し合います。
+        <hr class="sep">
+        曲面・測地線・曲率は数値計算（第一/第二基本形式と Christoffel 記号を差分で算出、測地線方程式を RK4 積分）なので、表示される 2 量はわずかな数値誤差を除いて一致します。
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+//==================================================================
+//  測地線と Gauss–Bonnet の定理 — 単一HTML・依存ゼロ・Canvas
+//  パラメトリック曲面 X(u,v) に対し
+//   - 第一基本形式 E,F,G と Christoffel 記号（差分）
+//   - 測地線方程式  u'' = -Γ¹·(u',v')² ,  v'' = -Γ²·(u',v')²  を RK4 積分
+//   - 2点を結ぶ測地線は「最接近シューティング法」で求解
+//   - 内角は計量内積で測定、領域の ∬K dA は (u,v) グリッドで数値積分
+//   ⇒  ∬_T K dA = Σθ − π  (局所 Gauss–Bonnet) を数値的に検証
+//==================================================================
+const cv = document.getElementById('cv');
+const ctx = cv.getContext('2d');
+
+//---------------------------- ベクトル小物 ----------------------------
+function dot(a,b){ return a[0]*b[0]+a[1]*b[1]+a[2]*b[2]; }
+function cross(a,b){ return [a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]]; }
+function normalize(a){ const l=Math.hypot(a[0],a[1],a[2])||1; return [a[0]/l,a[1]/l,a[2]/l]; }
+
+//---------------------------- 曲面の定義 ----------------------------
+// 各曲面: X(u,v)=[x,y,z], パラメータ範囲, デフォルト三角形(u,v)
+const SURFACES = {
+  sphere: {
+    label:'球面', R:1.4,
+    X:(u,v)=>{ const R=1.4; return [R*Math.sin(u)*Math.cos(v), R*Math.cos(u), R*Math.sin(u)*Math.sin(v)]; },
+    uMin:0.001, uMax:Math.PI-0.001, vMin:0, vMax:2*Math.PI, closeU:false, closeV:true,
+    dist:4.2,
+    tri:[{u:1.0,v:0.5},{u:2.0,v:0.8},{u:1.35,v:1.75}],
+    geo:{u:1.2,v:0.6},
+    note:'球面は K=1/R²&gt;0 が一定。角度超過は三角形の面積に比例します（球面過剰）。'
+  },
+  torus: {
+    label:'トーラス', RR:1.3, rr:0.55,
+    X:(u,v)=>{ const R=1.3,r=0.55; return [(R+r*Math.cos(v))*Math.cos(u), r*Math.sin(v), (R+r*Math.cos(v))*Math.sin(u)]; },
+    uMin:0, uMax:2*Math.PI, vMin:-Math.PI, vMax:Math.PI, closeU:true, closeV:true,
+    dist:5.2,
+    tri:[{u:0.5,v:-0.6},{u:1.5,v:-0.5},{u:0.95,v:0.7}],
+    geo:{u:0.6,v:0.0},
+    note:'トーラスは外側で K&gt;0、内側で K&lt;0。三角形を内外にまたいで動かすと曲率積分の符号が変わります。'
+  },
+  saddle: {
+    label:'鞍面',
+    X:(u,v)=>[u, 0.62*(u*u-v*v), v],
+    uMin:-1.35, uMax:1.35, vMin:-1.35, vMax:1.35, closeU:false, closeV:false,
+    dist:4.8,
+    tri:[{u:-0.85,v:-0.75},{u:0.85,v:-0.75},{u:0.0,v:0.85}],
+    geo:{u:-0.8,v:-0.6},
+    note:'鞍面（双曲放物面）は K&lt;0。内角の和は π より小さく、角度不足になります。'
+  },
+  pseudo: {
+    label:'擬球面',
+    X:(u,v)=>{ const sh=1/Math.cosh(u); return [sh*Math.cos(v), u-Math.tanh(u), sh*Math.sin(v)]; },
+    uMin:0.25, uMax:2.6, vMin:0, vMax:2*Math.PI, closeU:false, closeV:true,
+    dist:5.0,
+    tri:[{u:0.7,v:0.6},{u:1.15,v:-0.3},{u:1.5,v:0.55}],
+    geo:{u:0.8,v:0.5},
+    note:'擬球面は K=&minus;1 が一定（一定負曲率＝双曲幾何のモデル）。角度不足は三角形の面積にちょうど等しくなります。'
+  },
+  cylinder: {
+    label:'円柱',
+    X:(u,v)=>[Math.cos(u), v, Math.sin(u)],
+    uMin:0, uMax:2*Math.PI, vMin:-1.45, vMax:1.45, closeU:true, closeV:false,
+    dist:5.0,
+    tri:[{u:0.9,v:-0.85},{u:2.2,v:-0.6},{u:1.55,v:0.85}],
+    geo:{u:1.0,v:-0.9},
+    note:'円柱は K=0（平面を丸めただけの可展面）。内角の和はちょうど π で、平面の三角形と同じです。'
+  },
+};
+
+let SF = SURFACES.sphere;   // 現在の曲面
+const Xp = (u,v)=>SF.X(u,v);
+
+//---------------------------- 微分量（差分） ----------------------------
+const H1=1e-3;   // 1階差分
+const H2=2e-3;   // 2階差分
+function Xu(u,v){ const a=Xp(u+H1,v), b=Xp(u-H1,v); return [(a[0]-b[0])/(2*H1),(a[1]-b[1])/(2*H1),(a[2]-b[2])/(2*H1)]; }
+function Xv(u,v){ const a=Xp(u,v+H1), b=Xp(u,v-H1); return [(a[0]-b[0])/(2*H1),(a[1]-b[1])/(2*H1),(a[2]-b[2])/(2*H1)]; }
+function metric(u,v){ const xu=Xu(u,v), xv=Xv(u,v);
+  return {E:dot(xu,xu), F:dot(xu,xv), G:dot(xv,xv), xu, xv}; }
+function normalAt(u,v){ return normalize(cross(Xu(u,v),Xv(u,v))); }
+
+function gaussK(u,v){
+  const m=metric(u,v), n=normalize(cross(m.xu,m.xv));
+  const c=Xp(u,v);
+  const xpp=Xp(u+H2,v), xmm=Xp(u-H2,v);
+  const Xuu=[(xpp[0]-2*c[0]+xmm[0])/(H2*H2),(xpp[1]-2*c[1]+xmm[1])/(H2*H2),(xpp[2]-2*c[2]+xmm[2])/(H2*H2)];
+  const ypp=Xp(u,v+H2), ymm=Xp(u,v-H2);
+  const Xvv=[(ypp[0]-2*c[0]+ymm[0])/(H2*H2),(ypp[1]-2*c[1]+ymm[1])/(H2*H2),(ypp[2]-2*c[2]+ymm[2])/(H2*H2)];
+  const pp=Xp(u+H2,v+H2), pm=Xp(u+H2,v-H2), mp=Xp(u-H2,v+H2), mm=Xp(u-H2,v-H2);
+  const Xuv=[(pp[0]-pm[0]-mp[0]+mm[0])/(4*H2*H2),(pp[1]-pm[1]-mp[1]+mm[1])/(4*H2*H2),(pp[2]-pm[2]-mp[2]+mm[2])/(4*H2*H2)];
+  const L=dot(Xuu,n), M=dot(Xuv,n), N=dot(Xvv,n);
+  const det=m.E*m.G-m.F*m.F;
+  return (L*N-M*M)/(det||1e-12);
+}
+
+function christoffel(u,v){
+  const m=metric(u,v); const E=m.E,F=m.F,G=m.G; const det=E*G-F*F||1e-12;
+  const mu1=metric(u+H1,v), mu0=metric(u-H1,v), mv1=metric(u,v+H1), mv0=metric(u,v-H1);
+  const Eu=(mu1.E-mu0.E)/(2*H1), Fu=(mu1.F-mu0.F)/(2*H1), Gu=(mu1.G-mu0.G)/(2*H1);
+  const Ev=(mv1.E-mv0.E)/(2*H1), Fv=(mv1.F-mv0.F)/(2*H1), Gv=(mv1.G-mv0.G)/(2*H1);
+  const d2=2*det;
+  return {
+    G111:(G*Eu-2*F*Fu+F*Ev)/d2,
+    G211:(2*E*Fu-E*Ev-F*Eu)/d2,
+    G112:(G*Ev-F*Gu)/d2,
+    G212:(E*Gu-F*Ev)/d2,
+    G122:(2*G*Fv-G*Gu-F*Gv)/d2,
+    G222:(E*Gv-2*F*Fv+F*Gu)/d2,
+    E,F,G
+  };
+}
+
+//---------------------------- 測地線積分（RK4） ----------------------------
+function geoDeriv(s){ // s=[u,v,a,b], a=u', b=v'
+  const c=christoffel(s[0],s[1]); const a=s[2], b=s[3];
+  return [a, b,
+    -(c.G111*a*a + 2*c.G112*a*b + c.G122*b*b),
+    -(c.G211*a*a + 2*c.G212*a*b + c.G222*b*b)];
+}
+function rk4(s,ds){
+  const k1=geoDeriv(s);
+  const s2=[s[0]+.5*ds*k1[0],s[1]+.5*ds*k1[1],s[2]+.5*ds*k1[2],s[3]+.5*ds*k1[3]];
+  const k2=geoDeriv(s2);
+  const s3=[s[0]+.5*ds*k2[0],s[1]+.5*ds*k2[1],s[2]+.5*ds*k2[2],s[3]+.5*ds*k2[3]];
+  const k3=geoDeriv(s3);
+  const s4=[s[0]+ds*k3[0],s[1]+ds*k3[1],s[2]+ds*k3[2],s[3]+ds*k3[3]];
+  const k4=geoDeriv(s4);
+  return [ s[0]+ds/6*(k1[0]+2*k2[0]+2*k3[0]+k4[0]),
+           s[1]+ds/6*(k1[1]+2*k2[1]+2*k3[1]+k4[1]),
+           s[2]+ds/6*(k1[2]+2*k2[2]+2*k3[2]+k4[2]),
+           s[3]+ds/6*(k1[3]+2*k2[3]+2*k3[3]+k4[3]) ];
+}
+
+// 接平面の正規直交枠と「向き φ → (u',v') 速度」変換
+function tangentFrame(u,v){
+  const m=metric(u,v), xu=m.xu, xv=m.xv;
+  const T1=normalize(xu);
+  const d=dot(xv,T1);
+  const T2=normalize([xv[0]-d*T1[0], xv[1]-d*T1[1], xv[2]-d*T1[2]]);
+  const N=normalize(cross(xu,xv));
+  return {xu,xv,T1,T2,N,E:m.E,F:m.F,G:m.G};
+}
+function dirToVel(fr,phi){
+  const cph=Math.cos(phi), sph=Math.sin(phi);
+  const W=[cph*fr.T1[0]+sph*fr.T2[0], cph*fr.T1[1]+sph*fr.T2[1], cph*fr.T1[2]+sph*fr.T2[2]];
+  const wu=dot(W,fr.xu), wv=dot(W,fr.xv), det=fr.E*fr.G-fr.F*fr.F||1e-12;
+  return {a:(fr.G*wu-fr.F*wv)/det, b:(fr.E*wv-fr.F*wu)/det};
+}
+
+// 出発点から向き φ, 長さ nsteps 分の測地線を積分（点列を返す）
+function buildPath(u0,v0,phi,fr,ds,nsteps){
+  const vel=dirToVel(fr,phi); let s=[u0,v0,vel.a,vel.b]; const pts=[];
+  for(let i=0;i<=nsteps;i++){
+    const p=Xp(s[0],s[1]), n=normalAt(s[0],s[1]);
+    pts.push({u:s[0],v:s[1],x:p[0],y:p[1],z:p[2],nx:n[0],ny:n[1],nz:n[2]});
+    if(i<nsteps) s=rk4(s,ds);
+  }
+  return {pts, endVel:{a:s[2],b:s[3]}};
+}
+
+// 2点 A→B を結ぶ測地線（最接近シューティング法）
+function connect(A,B){
+  const fr=tangentFrame(A.u,A.v);
+  const A3=Xp(A.u,A.v), B3=Xp(B.u,B.v);
+  const chord=[B3[0]-A3[0],B3[1]-A3[1],B3[2]-A3[2]];
+  const cl=Math.hypot(chord[0],chord[1],chord[2]);
+  const cn=dot(chord,fr.N);
+  const Wc=[chord[0]-cn*fr.N[0], chord[1]-cn*fr.N[1], chord[2]-cn*fr.N[2]];
+  const phi0=Math.atan2(dot(Wc,fr.T2), dot(Wc,fr.T1));
+  const Lmax=Math.min(16, 1.9*cl+0.6), steps=360, ds=Lmax/steps;
+
+  // 与えた φ で積分し、B への最接近距離と到達ステップ数を返す
+  function measure(phi){
+    const vel=dirToVel(fr,phi); let s=[A.u,A.v,vel.a,vel.b];
+    let dmin=Infinity, idx=0;
+    for(let i=0;i<=steps;i++){
+      const p=Xp(s[0],s[1]);
+      const dx=p[0]-B3[0], dy=p[1]-B3[1], dz=p[2]-B3[2];
+      const d=dx*dx+dy*dy+dz*dz;
+      if(d<dmin){ dmin=d; idx=i; }
+      if(i<steps) s=rk4(s,ds);
+    }
+    return {dmin:Math.sqrt(dmin), idx};
+  }
+  // 粗いスキャン → 黄金分割で精密化
+  const WIN=1.15, NS=27; let best=phi0, bd=Infinity;
+  for(let i=0;i<NS;i++){ const phi=phi0-WIN+2*WIN*i/(NS-1); const r=measure(phi); if(r.dmin<bd){bd=r.dmin; best=phi;} }
+  let lo=best-2*WIN/(NS-1), hi=best+2*WIN/(NS-1);
+  const gr=(Math.sqrt(5)-1)/2;
+  let c1=hi-gr*(hi-lo), c2=lo+gr*(hi-lo);
+  let f1=measure(c1).dmin, f2=measure(c2).dmin;
+  for(let it=0;it<30;it++){
+    if(f1<f2){ hi=c2; c2=c1; f2=f1; c1=hi-gr*(hi-lo); f1=measure(c1).dmin; }
+    else     { lo=c1; c1=c2; f1=f2; c2=lo+gr*(hi-lo); f2=measure(c2).dmin; }
+  }
+  const phi=(lo+hi)/2; const mr=measure(phi);
+  const built=buildPath(A.u,A.v,phi,fr,ds,Math.max(1,mr.idx));
+  return { path:built.pts, startVel:dirToVel(fr,phi), endVel:built.endVel, dmin:mr.dmin };
+}
+
+// 計量内積による2接ベクトル間の角
+function angleMetric(p,q,u,v){
+  const m=metric(u,v), E=m.E,F=m.F,G=m.G;
+  const ip=(x,y)=>E*x.a*y.a + F*(x.a*y.b+x.b*y.a) + G*x.b*y.b;
+  let c=ip(p,q)/Math.sqrt((ip(p,p)*ip(q,q))||1e-18);
+  c=Math.max(-1,Math.min(1,c));
+  return Math.acos(c);
+}
+
+//---------------------------- (u,v) 領域の ∬K dA ----------------------------
+function pointInPoly(pu,pv,poly){
+  let inside=false;
+  for(let i=0,j=poly.length-1;i<poly.length;j=i++){
+    const ui=poly[i].u, vi=poly[i].v, uj=poly[j].u, vj=poly[j].v;
+    if(((vi>pv)!==(vj>pv)) && (pu < (uj-ui)*(pv-vi)/((vj-vi)||1e-18)+ui)) inside=!inside;
+  }
+  return inside;
+}
+function curvatureIntegral(poly){
+  let uMin=Infinity,uMax=-Infinity,vMin=Infinity,vMax=-Infinity;
+  for(const p of poly){ if(p.u<uMin)uMin=p.u; if(p.u>uMax)uMax=p.u; if(p.v<vMin)vMin=p.v; if(p.v>vMax)vMax=p.v; }
+  const N=150, du=(uMax-uMin)/N, dv=(vMax-vMin)/N, cell=du*dv;
+  let sum=0;
+  for(let i=0;i<N;i++){ const u=uMin+(i+0.5)*du;
+    for(let j=0;j<N;j++){ const v=vMin+(j+0.5)*dv;
+      if(pointInPoly(u,v,poly)){
+        const m=metric(u,v); const dA=Math.sqrt(Math.max(0,m.E*m.G-m.F*m.F))*cell;
+        sum += gaussK(u,v)*dA;
+      }
+    }
+  }
+  return sum;
+}
+
+//==================================================================
+//  状態
+//==================================================================
+let S = {
+  mode:'tri',
+  tri:[{u:1.0,v:0.5},{u:2.0,v:0.8},{u:1.35,v:1.75}],
+  edges:null, angles:null, excess:0, kInt:0, valid:false,
+  geoStart:{u:1.2,v:0.6}, geoPhi:40*Math.PI/180, geoLen:9, geoPath:null,
+  showCurv:true, fill:true, wire:false, spin:false,
+  cam:{az:0.6, el:0.35, dist:5.0, focal:0},
+  meshU:null, meshV:null, mx:null, my:null, mz:null, mK:null, faces:null, nv:0, nf:0, kMax:1,
+  SX:null, SY:null, RZ:null, scale:2,
+};
+
+//---------------------------- メッシュ生成（描画＆ピック用） ----------------------------
+function buildMesh(){
+  const NU=58, NV=58;
+  const uMin=SF.uMin, uMax=SF.uMax, vMin=SF.vMin, vMax=SF.vMax;
+  const verts=[]; const uvU=[], uvV=[];
+  for(let i=0;i<=NU;i++){ const u=uMin+(uMax-uMin)*i/NU;
+    for(let j=0;j<=NV;j++){ const v=vMin+(vMax-vMin)*j/NV;
+      const p=Xp(u,v); verts.push(p); uvU.push(u); uvV.push(v);
+    }
+  }
+  const idx=(i,j)=>i*(NV+1)+j;
+  const faces=[];
+  for(let i=0;i<NU;i++) for(let j=0;j<NV;j++){
+    faces.push(idx(i,j),idx(i+1,j),idx(i+1,j+1));
+    faces.push(idx(i,j),idx(i+1,j+1),idx(i,j+1));
+  }
+  const nv=verts.length;
+  S.nv=nv; S.nf=faces.length/3;
+  S.mx=new Float64Array(nv); S.my=new Float64Array(nv); S.mz=new Float64Array(nv);
+  S.meshU=new Float64Array(nv); S.meshV=new Float64Array(nv); S.mK=new Float64Array(nv);
+  let kmax=1e-6, sc=0;
+  for(let i=0;i<nv;i++){
+    S.mx[i]=verts[i][0]; S.my[i]=verts[i][1]; S.mz[i]=verts[i][2];
+    S.meshU[i]=uvU[i]; S.meshV[i]=uvV[i];
+    const k=gaussK(uvU[i],uvV[i]); S.mK[i]=k; if(Math.abs(k)>kmax) kmax=Math.abs(k);
+    const r=Math.hypot(verts[i][0],verts[i][1],verts[i][2]); if(r>sc) sc=r;
+  }
+  S.faces=new Int32Array(faces);
+  S.kMax=kmax; S.scale=sc||2;
+  S.SX=new Float64Array(nv); S.SY=new Float64Array(nv); S.RZ=new Float64Array(nv);
+}
+
+//---------------------------- ビュー ----------------------------
+function resize(){
+  const r=cv.parentElement.getBoundingClientRect();
+  const dpr=window.devicePixelRatio||1;
+  cv.width=Math.floor(r.width*dpr); cv.height=Math.floor(r.height*dpr);
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  S.cam.focal=Math.min(r.width,r.height)*0.62;
+  draw();
+}
+function rotate(x,y,z){
+  const ca=Math.cos(S.cam.az), sa=Math.sin(S.cam.az);
+  const ce=Math.cos(S.cam.el), se=Math.sin(S.cam.el);
+  const x1=x*ca+z*sa, z1=-x*sa+z*ca, y1=y;
+  return [x1, y1*ce-z1*se, y1*se+z1*ce];
+}
+function project(x,y,z, r){
+  const rp=rotate(x,y,z); const depth=S.cam.dist-rp[2];
+  return [r.width/2+S.cam.focal*rp[0]/depth, r.height/2-S.cam.focal*rp[1]/depth, rp[2], depth];
+}
+
+//---------------------------- 色 ----------------------------
+function curvColor(k,shade){
+  const t=Math.max(-1,Math.min(1, S.kMax>1e-9? k/S.kMax:0));
+  let r,g,b;
+  if(t>=0){ r=229+(239-229)*t; g=231-(231-68)*t; b=235-(235-68)*t; }
+  else    { const a=-t; r=229-(229-59)*a; g=231-(231-130)*a; b=235+(246-235)*a; }
+  return `rgb(${(r*shade)|0},${(g*shade)|0},${(b*shade)|0})`;
+}
+
+//---------------------------- 描画 ----------------------------
+function draw(){
+  const r=cv.parentElement.getBoundingClientRect();
+  ctx.clearRect(0,0,r.width,r.height);
+  if(S.nv===0) return;
+  const f=S.cam.focal, d=S.cam.dist, cx=r.width/2, cy=r.height/2;
+
+  // 全頂点を回転＆投影
+  const RX=new Float64Array(S.nv), RY=new Float64Array(S.nv);
+  for(let i=0;i<S.nv;i++){
+    const rp=rotate(S.mx[i],S.my[i],S.mz[i]);
+    RX[i]=rp[0]; RY[i]=rp[1]; S.RZ[i]=rp[2];
+    const depth=d-rp[2];
+    S.SX[i]=cx+f*rp[0]/depth; S.SY[i]=cy-f*rp[1]/depth;
+  }
+
+  // 面を奥行き順に
+  const F=S.faces, order=new Array(S.nf), fz=new Float64Array(S.nf);
+  for(let q=0;q<S.nf;q++){ const a=F[3*q],b=F[3*q+1],c=F[3*q+2]; fz[q]=(S.RZ[a]+S.RZ[b]+S.RZ[c])/3; order[q]=q; }
+  order.sort((p,q)=>fz[p]-fz[q]);
+  const L=normalize([0.35,0.45,0.82]);
+
+  for(let o=0;o<S.nf;o++){
+    const q=order[o], a=F[3*q],b=F[3*q+1],c=F[3*q+2];
+    const ux=RX[b]-RX[a], uy=RY[b]-RY[a], uz=S.RZ[b]-S.RZ[a];
+    const vx=RX[c]-RX[a], vy=RY[c]-RY[a], vz=S.RZ[c]-S.RZ[a];
+    let nx=uy*vz-uz*vy, ny=uz*vx-ux*vz, nz=ux*vy-uy*vx;
+    const nl=Math.hypot(nx,ny,nz)||1; nx/=nl;ny/=nl;nz/=nl;
+    if(S.wire){
+      if(nz<=0) continue;
+      ctx.beginPath(); ctx.moveTo(S.SX[a],S.SY[a]); ctx.lineTo(S.SX[b],S.SY[b]); ctx.lineTo(S.SX[c],S.SY[c]); ctx.closePath();
+      ctx.strokeStyle='rgba(120,170,230,0.4)'; ctx.lineWidth=0.6; ctx.stroke(); continue;
+    }
+    let lam=Math.max(0, Math.abs(nx*L[0]+ny*L[1]+nz*L[2])); // 両面が見えるよう abs
+    const shade=0.34+0.66*lam;
+    let fill;
+    if(S.showCurv){ const k=(S.mK[a]+S.mK[b]+S.mK[c])/3; fill=curvColor(k,shade); }
+    else fill=`rgb(${(120*shade)|0},${(165*shade)|0},${(220*shade)|0})`;
+    ctx.beginPath(); ctx.moveTo(S.SX[a],S.SY[a]); ctx.lineTo(S.SX[b],S.SY[b]); ctx.lineTo(S.SX[c],S.SY[c]); ctx.closePath();
+    ctx.fillStyle=fill; ctx.fill(); ctx.strokeStyle=fill; ctx.lineWidth=0.5; ctx.stroke();
+  }
+
+  if(S.mode==='tri') drawTriangle(r);
+  else drawSingleGeodesic(r);
+}
+
+// 測地線の点列を、前面=明・背面=淡 で描く
+function drawGeodesicPath(pts, r, color, width){
+  const d=S.cam.dist, f=S.cam.focal, cx=r.width/2, cy=r.height/2;
+  let prev=null, prevFront=true;
+  for(let i=0;i<pts.length;i++){
+    const p=pts[i]; const rp=rotate(p.x,p.y,p.z); const depth=d-rp[2];
+    const sx=cx+f*rp[0]/depth, sy=cy-f*rp[1]/depth;
+    const rn=rotate(p.nx,p.ny,p.nz); const front=rn[2]>-0.02;
+    if(prev){
+      ctx.beginPath(); ctx.moveTo(prev[0],prev[1]); ctx.lineTo(sx,sy);
+      if(front && prevFront){ ctx.strokeStyle=color; ctx.globalAlpha=1; ctx.lineWidth=width; ctx.setLineDash([]); }
+      else { ctx.strokeStyle=color; ctx.globalAlpha=0.28; ctx.lineWidth=width*0.8; ctx.setLineDash([4,4]); }
+      ctx.stroke();
+    }
+    prev=[sx,sy]; prevFront=front;
+  }
+  ctx.globalAlpha=1; ctx.setLineDash([]);
+}
+
+function drawTriangle(r){
+  if(!S.edges) return;
+  const d=S.cam.dist, f=S.cam.focal, cx=r.width/2, cy=r.height/2;
+  // 領域を塗る（境界の投影多角形を半透明で）
+  if(S.fill && S.valid){
+    const all=S.edges[0].path.concat(S.edges[1].path, S.edges[2].path);
+    ctx.beginPath();
+    for(let i=0;i<all.length;i+=2){ const p=all[i]; const rp=rotate(p.x,p.y,p.z); const depth=d-rp[2];
+      const sx=cx+f*rp[0]/depth, sy=cy-f*rp[1]/depth; if(i===0)ctx.moveTo(sx,sy); else ctx.lineTo(sx,sy); }
+    ctx.closePath();
+    ctx.fillStyle = S.excess>=0 ? 'rgba(255,180,84,0.16)' : 'rgba(78,161,255,0.16)';
+    ctx.fill();
+  }
+  // 3辺の測地線
+  for(const e of S.edges) drawGeodesicPath(e.path, r, '#ffe08a', 2.4);
+  // 頂点と内角ラベル
+  const names=['A','B','C'];
+  for(let i=0;i<3;i++){
+    const t=S.tri[i]; const p=Xp(t.u,t.v); const rp=rotate(p.x===undefined?p[0]:p[0],p[1],p[2]);
+    const depth=d-rp[2]; const sx=cx+f*rp[0]/depth, sy=cy-f*rp[1]/depth;
+    ctx.beginPath(); ctx.arc(sx,sy,6,0,2*Math.PI);
+    ctx.fillStyle='#ffffff'; ctx.fill(); ctx.lineWidth=2; ctx.strokeStyle='#1c232d'; ctx.stroke();
+    ctx.fillStyle='#ffffff'; ctx.font='bold 14px sans-serif'; ctx.fillText(names[i], sx+9, sy-7);
+    if(S.angles){ ctx.fillStyle='#ffd24a'; ctx.font='12px sans-serif';
+      ctx.fillText((S.angles[i]*180/Math.PI).toFixed(1)+'°', sx+9, sy+12); }
+  }
+}
+
+function drawSingleGeodesic(r){
+  if(!S.geoPath) return;
+  drawGeodesicPath(S.geoPath.pts, r, '#5ad19a', 2.4);
+  const d=S.cam.dist, f=S.cam.focal, cx=r.width/2, cy=r.height/2;
+  const t=S.geoStart; const p=Xp(t.u,t.v); const rp=rotate(p[0],p[1],p[2]);
+  const depth=d-rp[2]; const sx=cx+f*rp[0]/depth, sy=cy-f*rp[1]/depth;
+  ctx.beginPath(); ctx.arc(sx,sy,6,0,2*Math.PI); ctx.fillStyle='#ffffff'; ctx.fill();
+  ctx.lineWidth=2; ctx.strokeStyle='#1c232d'; ctx.stroke();
+}
+
+//---------------------------- ピック（クリック位置 → (u,v)） ----------------------------
+function pickUV(mx,my){
+  const F=S.faces; let bestZ=-Infinity, uvU=null, uvV=null;
+  for(let q=0;q<S.nf;q++){
+    const a=F[3*q],b=F[3*q+1],c=F[3*q+2];
+    const ax=S.SX[a],ay=S.SY[a], bx=S.SX[b],by=S.SY[b], cx2=S.SX[c],cy2=S.SY[c];
+    const dnm=(by-cy2)*(ax-cx2)+(cx2-bx)*(ay-cy2);
+    if(Math.abs(dnm)<1e-9) continue;
+    const w0=((by-cy2)*(mx-cx2)+(cx2-bx)*(my-cy2))/dnm;
+    const w1=((cy2-ay)*(mx-cx2)+(ax-cx2)*(my-cy2))/dnm;
+    const w2=1-w0-w1;
+    if(w0<-0.02||w1<-0.02||w2<-0.02) continue;
+    const z=(S.RZ[a]+S.RZ[b]+S.RZ[c])/3;
+    if(z>bestZ){ bestZ=z; uvU=w0*S.meshU[a]+w1*S.meshU[b]+w2*S.meshU[c]; uvV=w0*S.meshV[a]+w1*S.meshV[b]+w2*S.meshV[c]; }
+  }
+  if(uvU===null) return null;
+  return {u:uvU, v:uvV};
+}
+function vertexScreen(t,r){
+  const d=S.cam.dist, f=S.cam.focal, cx=r.width/2, cy=r.height/2;
+  const p=Xp(t.u,t.v); const rp=rotate(p[0],p[1],p[2]); const depth=d-rp[2];
+  return [cx+f*rp[0]/depth, cy-f*rp[1]/depth];
+}
+
+//---------------------------- 解く ----------------------------
+function solveTriangle(){
+  const [A,B,C]=S.tri;
+  const gAB=connect(A,B), gBC=connect(B,C), gCA=connect(C,A);
+  S.edges=[gAB,gBC,gCA];
+  const rev=v=>({a:-v.a,b:-v.b});
+  const angA=angleMetric(gAB.startVel, rev(gCA.endVel), A.u,A.v);
+  const angB=angleMetric(rev(gAB.endVel), gBC.startVel, B.u,B.v);
+  const angC=angleMetric(rev(gBC.endVel), gCA.startVel, C.u,C.v);
+  S.angles=[angA,angB,angC];
+  const sum=angA+angB+angC;
+  S.excess=sum-Math.PI;
+  const poly=gAB.path.concat(gBC.path, gCA.path);
+  S.kInt=curvatureIntegral(poly);
+  const tol=0.06*S.scale;
+  S.valid=(gAB.dmin<tol && gBC.dmin<tol && gCA.dmin<tol);
+  updateGB(sum);
+}
+function updateGB(sum){
+  const deg=x=>(x*180/Math.PI).toFixed(1)+'°';
+  document.getElementById('gb-a').textContent=deg(S.angles[0]);
+  document.getElementById('gb-b').textContent=deg(S.angles[1]);
+  document.getElementById('gb-c').textContent=deg(S.angles[2]);
+  document.getElementById('gb-sum').textContent=deg(sum)+' ('+sum.toFixed(4)+' rad)';
+  document.getElementById('gb-exc').textContent=S.excess.toFixed(4)+' rad';
+  document.getElementById('gb-int').textContent=S.kInt.toFixed(4);
+  const diff=Math.abs(S.excess-S.kInt);
+  const m=document.getElementById('gb-match');
+  if(!S.valid){ m.className='match no'; m.textContent='測地線が頂点に届きませんでした（三角形を小さくしてください）'; }
+  else if(diff<0.04){ m.className='match ok'; m.textContent='✓ 一致（差 '+diff.toFixed(4)+'）— Gauss–Bonnet 成立'; }
+  else { m.className='match no'; m.textContent='差 '+diff.toFixed(4)+'（数値誤差／三角形が大きすぎる可能性）'; }
+  document.getElementById('gb-note').innerHTML=SF.note;
+  const st=document.getElementById('status');
+  st.innerHTML='曲面: <b>'+SF.label+'</b> &nbsp; ∬K dA = <b>'+S.kInt.toFixed(3)+'</b> &nbsp; Σθ−π = <b>'+S.excess.toFixed(3)+'</b>';
+}
+
+function solveGeodesic(){
+  const fr=tangentFrame(S.geoStart.u, S.geoStart.v);
+  const steps=Math.min(1400, Math.max(60, Math.round(S.geoLen/0.025)));
+  const ds=S.geoLen/steps;
+  S.geoPath=buildPath(S.geoStart.u, S.geoStart.v, S.geoPhi, fr, ds, steps);
+  const st=document.getElementById('status');
+  st.innerHTML='曲面: <b>'+SF.label+'</b> &nbsp; 測地線シュート（長さ L='+S.geoLen.toFixed(1)+'）';
+}
+
+//---------------------------- ロード ----------------------------
+// 三角形（またはシュート出発点）の重心が画面中央を向くようカメラを自動調整
+function frameCamera(){
+  let pts = S.mode==='tri' ? S.tri : [S.geoStart];
+  let cx=0,cy=0,cz=0;
+  for(const t of pts){ const p=Xp(t.u,t.v); cx+=p[0]; cy+=p[1]; cz+=p[2]; }
+  cx/=pts.length; cy/=pts.length; cz/=pts.length;
+  S.cam.az = Math.atan2(-cx, cz);
+  const rxz = Math.hypot(cx,cz);
+  S.cam.el = Math.max(-1.45, Math.min(1.45, Math.atan2(cy, rxz)));
+  S.cam.dist = SF.dist || 5.0;
+}
+function loadSurface(key){
+  SF=SURFACES[key];
+  S.tri=SF.tri.map(t=>({u:t.u,v:t.v}));
+  S.geoStart={u:SF.geo.u, v:SF.geo.v};
+  buildMesh();
+  frameCamera();
+  if(S.mode==='tri') solveTriangle(); else solveGeodesic();
+  draw();
+}
+function resetTriangle(){ S.tri=SF.tri.map(t=>({u:t.u,v:t.v})); solveTriangle(); draw(); }
+
+//---------------------------- マウス操作 ----------------------------
+let dragging=false, dragVertex=-1, lastX=0, lastY=0;
+function nearVertexIndex(mx,my){
+  const r=cv.parentElement.getBoundingClientRect();
+  if(S.mode==='tri'){
+    for(let i=0;i<3;i++){ const sp=vertexScreen(S.tri[i],r); if(Math.hypot(sp[0]-mx,sp[1]-my)<13) return i; }
+  }
+  return -1;
+}
+cv.addEventListener('pointerdown',e=>{
+  const rect=cv.getBoundingClientRect(); const mx=e.clientX-rect.left, my=e.clientY-rect.top;
+  dragVertex=nearVertexIndex(mx,my);
+  dragging=true; lastX=e.clientX; lastY=e.clientY; cv.setPointerCapture(e.pointerId);
+  if(S.mode==='geo' && dragVertex<0){
+    const uv=pickUV(mx,my); if(uv){ S.geoStart=uv; solveGeodesic(); draw(); dragVertex=-2; } // -2: 出発点を置いた
+  }
+});
+cv.addEventListener('pointermove',e=>{
+  if(!dragging) return;
+  const rect=cv.getBoundingClientRect(); const mx=e.clientX-rect.left, my=e.clientY-rect.top;
+  if(dragVertex>=0){
+    const uv=pickUV(mx,my);
+    if(uv){ S.tri[dragVertex]=uv; draw(); drawProvisional(); }  // ドラッグ中は仮表示（軽量）
+  } else if(dragVertex===-2){
+    const uv=pickUV(mx,my); if(uv){ S.geoStart=uv; solveGeodesic(); draw(); }
+  } else {
+    S.cam.az += (e.clientX-lastX)*0.008;
+    S.cam.el += (e.clientY-lastY)*0.008;
+    S.cam.el = Math.max(-1.45,Math.min(1.45,S.cam.el));
+    lastX=e.clientX; lastY=e.clientY; draw();
+  }
+});
+cv.addEventListener('pointerup',()=>{
+  if(dragVertex>=0){ solveTriangle(); draw(); }   // ドラッグ終了時に再計算
+  dragging=false; dragVertex=-1;
+});
+cv.addEventListener('wheel',e=>{ e.preventDefault();
+  S.cam.dist*=Math.exp(e.deltaY*0.0012); S.cam.dist=Math.max(2.6,Math.min(13,S.cam.dist)); draw();
+},{passive:false});
+
+// 頂点ドラッグ中の仮の直線ガイド
+function drawProvisional(){
+  const r=cv.parentElement.getBoundingClientRect();
+  const sp=S.tri.map(t=>vertexScreen(t,r));
+  ctx.setLineDash([5,5]); ctx.strokeStyle='rgba(255,224,138,0.5)'; ctx.lineWidth=1.5;
+  ctx.beginPath(); ctx.moveTo(sp[0][0],sp[0][1]); ctx.lineTo(sp[1][0],sp[1][1]); ctx.lineTo(sp[2][0],sp[2][1]); ctx.closePath(); ctx.stroke();
+  ctx.setLineDash([]);
+  for(let i=0;i<3;i++){ ctx.beginPath(); ctx.arc(sp[i][0],sp[i][1],6,0,2*Math.PI); ctx.fillStyle='#ffffff'; ctx.fill(); }
+}
+
+//---------------------------- UI ----------------------------
+function setMode(m){
+  S.mode=m;
+  document.getElementById('mode-tri').classList.toggle('active', m==='tri');
+  document.getElementById('mode-geo').classList.toggle('active', m==='geo');
+  document.getElementById('grp-tri').style.display = m==='tri'?'':'none';
+  document.getElementById('grp-geo').style.display = m==='geo'?'':'none';
+  document.getElementById('mode-hint').textContent = m==='tri'
+    ? '3 頂点を結ぶ測地線で三角形を作り、内角の和と曲率積分を比較します。頂点 A·B·C をドラッグできます。'
+    : '曲面をクリックして出発点を置き、向きと長さを変えて測地線を観察します。';
+  if(m==='tri') solveTriangle(); else solveGeodesic();
+  draw();
+}
+function bindUI(){
+  document.getElementById('mode-tri').addEventListener('click',()=>setMode('tri'));
+  document.getElementById('mode-geo').addEventListener('click',()=>setMode('geo'));
+  document.querySelectorAll('[data-surf]').forEach(b=>b.addEventListener('click',()=>{
+    const k=b.dataset.surf; if(k==='reset') resetTriangle(); else loadSurface(k);
+  }));
+  const phi=document.getElementById('geo-phi');
+  phi.addEventListener('input',()=>{ S.geoPhi=parseFloat(phi.value)*Math.PI/180;
+    document.getElementById('geo-phi-v').textContent=phi.value+'°'; solveGeodesic(); draw(); });
+  const len=document.getElementById('geo-len');
+  len.addEventListener('input',()=>{ S.geoLen=parseFloat(len.value);
+    document.getElementById('geo-len-v').textContent=S.geoLen.toFixed(1); solveGeodesic(); draw(); });
+  document.getElementById('opt-curv').addEventListener('change',e=>{ S.showCurv=e.target.checked; draw(); });
+  document.getElementById('opt-fill').addEventListener('change',e=>{ S.fill=e.target.checked; draw(); });
+  document.getElementById('opt-wire').addEventListener('change',e=>{ S.wire=e.target.checked; draw(); });
+  document.getElementById('opt-spin').addEventListener('change',e=>{ S.spin=e.target.checked; });
+  window.addEventListener('resize',resize);
+}
+
+function frame(){ if(S.spin && !dragging){ S.cam.az+=0.004; draw(); } requestAnimationFrame(frame); }
+
+bindUI(); resize(); loadSurface('sphere'); requestAnimationFrame(frame);
+</script>
+</body>
+</html>

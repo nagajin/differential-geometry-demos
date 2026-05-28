@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>微分幾何 教材デモ集 — Differential Geometry Demos</title>
+<style>
+  :root {
+    --bg:#0e1116; --panel:#161b22; --panel2:#1c232d; --border:#2a323d;
+    --text:#d6dde6; --muted:#8b97a6; --accent:#4ea1ff; --accent2:#ffb454;
+  }
+  * { box-sizing:border-box; }
+  html,body { margin:0; padding:0; min-height:100%; background:var(--bg); color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,sans-serif; }
+  body { background:radial-gradient(circle at 50% 0%,#131a24 0%,#0e1116 60%); }
+  .wrap { max-width:760px; margin:0 auto; padding:56px 22px 80px; }
+  h1 { font-size:26px; margin:0 0 6px; }
+  .lead { color:var(--muted); font-size:14px; line-height:1.7; margin:0 0 6px; }
+  .lead.en { font-size:12px; }
+  .cards { display:grid; gap:14px; margin:30px 0 26px; }
+  a.card { display:block; text-decoration:none; color:inherit; background:var(--panel);
+    border:1px solid var(--border); border-radius:14px; padding:18px 20px; transition:border-color .15s, transform .15s, background .15s; }
+  a.card:hover { border-color:var(--accent); background:var(--panel2); transform:translateY(-2px); }
+  a.card h2 { margin:0 0 6px; font-size:17px; color:var(--accent); }
+  a.card .formula { font-size:14px; color:var(--accent2); margin:2px 0 8px; }
+  a.card p { margin:0; color:var(--muted); font-size:13px; line-height:1.6; }
+  .tag { display:inline-block; font-size:11px; color:var(--muted); border:1px solid var(--border);
+    border-radius:999px; padding:2px 9px; margin-right:6px; margin-top:8px; }
+  .sec { color:var(--accent); font-size:13px; font-weight:600; margin:26px 0 10px; }
+  .ext { color:var(--muted); font-size:13px; line-height:1.8; }
+  .ext a { color:var(--accent); text-decoration:none; }
+  .ext a:hover { text-decoration:underline; }
+  footer { color:var(--muted); font-size:11px; line-height:1.7; margin-top:40px;
+    border-top:1px solid var(--border); padding-top:16px; }
+  code { background:#0e1116; padding:1px 6px; border-radius:5px; color:var(--accent2); font-size:12px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>微分幾何 教材デモ集</h1>
+  <p class="lead">曲面の幾何を、ブラウザ上でインタラクティブに観察するための教材デモ集です。外部ライブラリ・ビルド・サーバを一切必要とせず、各デモは単一の HTML ファイルだけで動作します。</p>
+  <p class="lead en">Interactive, dependency-free web demos for differential geometry — each one a single self-contained HTML file.</p>
+
+  <div class="cards">
+    <a class="card" href="gauss-bonnet.html">
+      <h2>測地線と Gauss–Bonnet の定理</h2>
+      <div class="formula">&#8748;<sub>T</sub> K dA &nbsp;=&nbsp; (&theta;<sub>A</sub>+&theta;<sub>B</sub>+&theta;<sub>C</sub>) &minus; &pi;</div>
+      <p>パラメトリック曲面の上に測地線三角形を描き、内角の和とガウス曲率の積分が一致することを数値的に確かめます。球面・トーラス・鞍面・擬球面 (K=&minus;1)・円柱 (K=0) を収録。測地線シュートモードで「曲面上のまっすぐな線」も観察できます。</p>
+      <span class="tag">測地線</span><span class="tag">ガウス曲率</span><span class="tag">Gauss–Bonnet</span>
+    </a>
+  </div>
+
+  <div class="sec">関連</div>
+  <p class="ext">
+    ▸ <a href="https://nagajin.github.io/mean-curvature-flow/">平均曲率流シミュレータ（2次元 曲線短縮流）</a><br>
+    ▸ <a href="https://nagajin.github.io/mean-curvature-flow/surface3d.html">平均曲率流シミュレータ（3次元 曲面）</a>
+  </p>
+
+  <footer>
+    数学的背景は東京理科大学 小池直之先生の講義・研究にもとづいています。<br>
+    Single-file, zero-dependency. Rendered with the HTML Canvas 2D API.
+  </footer>
+</div>
+</body>
+</html>
