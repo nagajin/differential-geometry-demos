@@ -190,10 +190,11 @@ function fundForms(u,v){
   const E=dot(xu,xu),F=dot(xu,xv),G=dot(xv,xv);
   let n=normalize(cross(xu,xv));
   const p=Xp(u,v);
-  // 凸な面（球など外に膨らむ面）で H>0, k>0 となるよう、法線を内向き（重心側）に揃える。
-  // これで surface3d の平均曲率流ツールと同じ「凸=正」の符号になる（K は向きに依らず不変）。
-  if(S.centroid){ const out=[p[0]-S.centroid[0],p[1]-S.centroid[1],p[2]-S.centroid[2]];
-    if(dot(n,out)>0){ n=[-n[0],-n[1],-n[2]]; } }
+  // 法線の向きは曲面ごとに「一定の符号」で揃える。点ごとに重心との内積で反転すると、
+  // 鞍面などでは符号が領域内で不連続になり H・k₁・k₂ の表示が破綻するため。
+  // S.normalSign は buildMesh で大域的に一度だけ決める（凸=正：球などで H>0、平均曲率流ツールと整合）。
+  // K=(LN−M²)/(EG−F²) は法線の向きに依らず不変。
+  if(S.normalSign<0){ n=[-n[0],-n[1],-n[2]]; }
   const c=p;
   const xpp=Xp(u+H2,v), xmm=Xp(u-H2,v);
   const Xuu=[(xpp[0]-2*c[0]+xmm[0])/(H2*H2),(xpp[1]-2*c[1]+xmm[1])/(H2*H2),(xpp[2]-2*c[2]+xmm[2])/(H2*H2)];
@@ -228,7 +229,7 @@ function principal(u,v){
     const d=[a*f.xu[0]+b*f.xv[0], a*f.xu[1]+b*f.xv[1], a*f.xu[2]+b*f.xv[2]];
     return normalize(d);
   }
-  return {k1,k2,K,H, d1:eigVec(k1), d2:eigVec(k2), umbilic:s<1e-3};
+  return {k1,k2,K,H, d1:eigVec(k1), d2:eigVec(k2), n:f.n, umbilic:s<1e-3};
 }
 
 //---------------------------- 状態 ----------------------------
@@ -236,7 +237,7 @@ let S={
   mode:'K', showDirs:true, wire:false, spin:false,
   cam:{az:0.6,el:0.35,dist:4.6,focal:0},
   nv:0,nf:0, mx:null,my:null,mz:null, mU:null,mV:null, mK:null,mH:null,mk1:null,mk2:null,
-  faces:null, SX:null,SY:null,RZ:null, centroid:null, scale:2,
+  faces:null, SX:null,SY:null,RZ:null, centroid:null, normalSign:1, scale:2,
   inspect:null,  // {u,v}
 };
 
@@ -256,6 +257,12 @@ function buildMesh(){
   let cx=0,cy=0,cz=0;
   for(let i=0;i<nv;i++){ S.mx[i]=P[i][0];S.my[i]=P[i][1];S.mz[i]=P[i][2]; cx+=P[i][0];cy+=P[i][1];cz+=P[i][2]; }
   S.centroid=[cx/nv,cy/nv,cz/nv];
+  // 法線の大域的な向きを一度だけ決める：平均的に外向き(g>0)なら反転して「凸=正」に揃える。
+  // これで面全体で符号が連続になる（点ごとの反転による鞍面での不連続を防ぐ）。
+  let g=0;
+  for(let i=0;i<nv;i++){ const xu=Xu(UU[i],VV[i]), xv=Xv(UU[i],VV[i]); const np=normalize(cross(xu,xv));
+    g += np[0]*(P[i][0]-S.centroid[0]) + np[1]*(P[i][1]-S.centroid[1]) + np[2]*(P[i][2]-S.centroid[2]); }
+  S.normalSign = g>0 ? -1 : 1;
   let sc=0;
   for(let i=0;i<nv;i++){
     S.mU[i]=UU[i]; S.mV[i]=VV[i];
@@ -326,15 +333,15 @@ function drawDirField(r){
   const uMin=SF.uMin,uMax=SF.uMax,vMin=SF.vMin,vMax=SF.vMax;
   for(let i=1;i<NU;i++){ const u=uMin+(uMax-uMin)*i/NU;
     for(let j=1;j<NV;j++){ const v=vMin+(vMax-vMin)*j/NV;
-      const p=Xp(u,v); const rp=rotate(p[0],p[1],p[2]);
-      const rn=rotate(...principalNormal(u,v)); if(rn[2]<=0.02) continue; // 前面のみ
-      const pr=principal(u,v); if(pr.umbilic) continue;
+      const p=Xp(u,v);
+      const pr=principal(u,v);            // 法線も pr.n で取得（fundForms の二重計算を回避）
+      const rn=rotate(pr.n[0],pr.n[1],pr.n[2]); if(rn[2]<=0.02) continue; // 前面のみ
+      if(pr.umbilic) continue;
       seg(p,pr.d1,len, 'rgba(255,122,89,0.9)', 1.4, r);
       seg(p,pr.d2,len, 'rgba(86,180,255,0.9)', 1.4, r);
     }
   }
 }
-function principalNormal(u,v){ const f=fundForms(u,v); return f.n; }
 function seg(p,dir,len,color,w,r){
   const d=S.cam.dist,f=S.cam.focal,cx=r.width/2,cy=r.height/2;
   const a=[p[0]-dir[0]*len,p[1]-dir[1]*len,p[2]-dir[2]*len];
