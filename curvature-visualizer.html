@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>曲面の曲率ビジュアライザ — ガウス曲率・平均曲率・主方向</title>
+<style>
+  :root {
+    --bg:#0e1116; --panel:#161b22; --panel2:#1c232d; --border:#2a323d;
+    --text:#d6dde6; --muted:#8b97a6; --accent:#4ea1ff; --accent2:#ffb454; --good:#5ad19a;
+    --warm:#ff7a59; --cool:#56b4ff;
+  }
+  * { box-sizing:border-box; }
+  html,body { margin:0; padding:0; height:100%; background:var(--bg); color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,sans-serif; }
+  #app { display:flex; height:100vh; overflow:hidden; }
+  #stage { flex:1; position:relative; min-width:0; }
+  canvas { display:block; width:100%; height:100%; background:radial-gradient(circle at 50% 42%,#131a24 0%,#0e1116 72%); cursor:grab; }
+  canvas:active { cursor:grabbing; }
+  #sidebar { width:330px; flex:0 0 330px; background:var(--panel); border-left:1px solid var(--border);
+    overflow-y:auto; padding:16px 16px 40px; font-size:13px; }
+  h1 { font-size:16px; margin:0 0 2px; }
+  .sub { color:var(--muted); font-size:11px; margin:0 0 14px; line-height:1.5; }
+  .nav { font-size:11px; margin:0 0 12px; }
+  .nav a { color:var(--accent); text-decoration:none; }
+  .nav a:hover { text-decoration:underline; }
+  .group { background:var(--panel2); border:1px solid var(--border); border-radius:10px; padding:12px; margin-bottom:12px; }
+  .group h2 { font-size:12px; margin:0 0 10px; color:var(--accent); font-weight:600; }
+  .btn-row { display:flex; gap:6px; flex-wrap:wrap; }
+  button { background:#233040; color:var(--text); border:1px solid var(--border); border-radius:8px;
+    padding:7px 10px; font-size:12px; cursor:pointer; transition:background .12s,border-color .12s; font-family:inherit; }
+  button:hover { background:#2c3c50; border-color:#3a4a5e; }
+  button.active { background:var(--accent2); color:#2a1c05; border-color:var(--accent2); font-weight:600; }
+  button.wide { flex:1; }
+  .preset-grid { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+  .check { display:flex; align-items:center; gap:8px; margin:8px 0; cursor:pointer; }
+  .check input { accent-color:var(--accent); width:15px; height:15px; }
+  #readout { font-variant-numeric:tabular-nums; line-height:1.8; }
+  #readout .m { display:flex; justify-content:space-between; }
+  #readout .m span:first-child { color:var(--muted); }
+  #readout .k1 { color:var(--warm); }
+  #readout .k2 { color:var(--cool); }
+  #status { position:absolute; top:14px; left:16px; font-size:12px; color:var(--muted);
+    background:rgba(14,17,22,.7); padding:6px 10px; border-radius:8px; border:1px solid var(--border);
+    pointer-events:none; backdrop-filter:blur(4px); }
+  #status b { color:var(--accent2); }
+  #hintbar { position:absolute; bottom:12px; left:16px; font-size:11px; color:var(--muted);
+    background:rgba(14,17,22,.6); padding:5px 9px; border-radius:7px; pointer-events:none; }
+  .hint { color:var(--muted); font-size:11px; line-height:1.55; margin-top:6px; }
+  .legend { margin-top:8px; }
+  .legend .row { display:flex; align-items:center; gap:8px; font-size:11px; color:var(--muted); }
+  .legend .bar { height:10px; flex:1; border-radius:4px; background:linear-gradient(90deg,#3b82f6,#e5e7eb,#ef4444); }
+  .legend .dirs { display:flex; gap:14px; margin-top:6px; font-size:11px; }
+  .legend .sw { display:inline-block; width:16px; height:3px; border-radius:2px; vertical-align:middle; margin-right:5px; }
+  hr.sep { border:none; border-top:1px solid var(--border); margin:10px 0; }
+  code { background:#0e1116; padding:1px 5px; border-radius:4px; color:var(--accent2); font-size:11px; }
+  .formula { background:#0e1116; border:1px solid var(--border); border-radius:8px; padding:8px 10px; font-size:12.5px; text-align:center; margin:2px 0 4px; line-height:1.7; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="stage">
+    <canvas id="cv"></canvas>
+    <div id="status"></div>
+    <div id="hintbar">ドラッグで回転 / ホイールで拡大縮小 / 曲面をクリックして点の曲率を表示</div>
+  </div>
+  <div id="sidebar">
+    <h1>曲面の曲率ビジュアライザ</h1>
+    <p class="sub">𝔼³ 内の曲面のガウス曲率 K・平均曲率 H と主曲率方向を可視化します。</p>
+    <p class="nav">▸ <a href="https://nagajin.github.io/differential-geometry-demos/">デモ一覧</a> &nbsp;/&nbsp; <a href="gauss-bonnet.html">測地線＋Gauss–Bonnet</a> &nbsp;/&nbsp; <a href="https://nagajin.github.io/mean-curvature-flow/surface3d.html">平均曲率流</a></p>
+
+    <div class="formula">K = k₁k₂ &nbsp;(ガウス曲率)<br>H = (k₁+k₂)/2 &nbsp;(平均曲率)</div>
+
+    <div class="group">
+      <h2>曲面</h2>
+      <div class="preset-grid">
+        <button data-surf="sphere">球面</button>
+        <button data-surf="ellipsoid">楕円体</button>
+        <button data-surf="torus">トーラス</button>
+        <button data-surf="saddle">鞍面</button>
+        <button data-surf="monkey">猿の鞍</button>
+        <button data-surf="catenoid">カテノイド (H=0)</button>
+      </div>
+    </div>
+
+    <div class="group">
+      <h2>色で表示する量</h2>
+      <div class="btn-row">
+        <button class="wide cmode active" data-mode="K">ガウス曲率 K</button>
+        <button class="wide cmode" data-mode="H">平均曲率 H</button>
+      </div>
+      <div class="btn-row" style="margin-top:6px">
+        <button class="wide cmode" data-mode="k1">主曲率 k₁ (大)</button>
+        <button class="wide cmode" data-mode="k2">主曲率 k₂ (小)</button>
+      </div>
+      <div class="legend">
+        <div class="row"><span>負</span><div class="bar"></div><span>正</span></div>
+        <div class="legend-note hint" id="legend-note"></div>
+      </div>
+    </div>
+
+    <div class="group">
+      <h2>表示</h2>
+      <label class="check"><input type="checkbox" id="opt-dirs" checked> 主曲率方向の場（曲率線）を表示</label>
+      <label class="check"><input type="checkbox" id="opt-wire"> ワイヤーフレーム</label>
+      <label class="check"><input type="checkbox" id="opt-spin"> 自動回転</label>
+      <div class="legend dirs">
+        <span><span class="sw" style="background:var(--warm)"></span>k₁ 方向</span>
+        <span><span class="sw" style="background:var(--cool)"></span>k₂ 方向</span>
+      </div>
+    </div>
+
+    <div class="group">
+      <h2>点の曲率（クリックで選択）</h2>
+      <div id="readout">
+        <div class="m"><span>ガウス曲率 K</span><span id="ro-K">—</span></div>
+        <div class="m"><span>平均曲率 H</span><span id="ro-H">—</span></div>
+        <div class="m"><span class="k1">主曲率 k₁</span><span class="k1" id="ro-k1">—</span></div>
+        <div class="m"><span class="k2">主曲率 k₂</span><span class="k2" id="ro-k2">—</span></div>
+        <div class="m"><span>点の種類</span><span id="ro-type">—</span></div>
+      </div>
+    </div>
+
+    <div class="group">
+      <h2>解説</h2>
+      <div class="hint" id="note"></div>
+      <hr class="sep">
+      <div class="hint">
+        各点で第一基本形式 <code>I=(E,F,G)</code> と第二基本形式 <code>II=(L,M,N)</code> を差分で求め、形状作用素 <code>S=I⁻¹II</code> の固有値が主曲率 k₁,k₂、固有ベクトルが主方向です。<code>K=det S</code>、<code>H=tr S/2</code>。K は法線の向きに依らず不変、H・k は法線の向きで符号が変わります。ここでは凸な面（球面など）で H>0・k>0 となる向き（平均曲率流ツールと同じ「凸=正」）に揃えています。
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+//==================================================================
+//  曲面の曲率ビジュアライザ — 単一HTML・依存ゼロ・Canvas
+//  パラメトリック曲面 X(u,v) の
+//   - ガウス曲率 K=(LN−M²)/(EG−F²)
+//   - 平均曲率   H=(EN−2FM+GL)/(2(EG−F²))
+//   - 主曲率 k1,k2 と主方向（形状作用素 S=I⁻¹II の固有値・固有ベクトル）
+//  をすべて差分で算出し可視化する
+//==================================================================
+const cv=document.getElementById('cv');
+const ctx=cv.getContext('2d');
+
+function dot(a,b){ return a[0]*b[0]+a[1]*b[1]+a[2]*b[2]; }
+function cross(a,b){ return [a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]]; }
+function normalize(a){ const l=Math.hypot(a[0],a[1],a[2])||1; return [a[0]/l,a[1]/l,a[2]/l]; }
+
+//---------------------------- 曲面 ----------------------------
+const SURFACES={
+  sphere:{ label:'球面', dist:4.6,
+    X:(u,v)=>{ const R=1.4; return [R*Math.sin(u)*Math.cos(v), R*Math.cos(u), R*Math.sin(u)*Math.sin(v)]; },
+    uMin:0.001,uMax:Math.PI-0.001,vMin:0,vMax:2*Math.PI,
+    note:'球面はすべての点が臍点 (k₁=k₂)。K=1/R²>0, H=1/R で一定。主方向は定まりません（どの方向も主方向）。' },
+  ellipsoid:{ label:'楕円体', dist:5.0,
+    X:(u,v)=>[1.9*Math.sin(u)*Math.cos(v), 1.0*Math.cos(u), 1.3*Math.sin(u)*Math.sin(v)],
+    uMin:0.001,uMax:Math.PI-0.001,vMin:0,vMax:2*Math.PI,
+    note:'楕円体は K>0 だが場所により大小が変化。主方向（曲率線）が経線・緯線状に流れ、4つの臍点をもちます。' },
+  torus:{ label:'トーラス', dist:5.2,
+    X:(u,v)=>{ const R=1.3,r=0.55; return [(R+r*Math.cos(v))*Math.cos(u), r*Math.sin(v), (R+r*Math.cos(v))*Math.sin(u)]; },
+    uMin:0,uMax:2*Math.PI,vMin:-Math.PI,vMax:Math.PI,
+    note:'トーラスは外側 (cos v>0) で K>0、内側で K<0、上下の輪 (v=±π/2) で K=0。主方向はちょうど経線・緯線方向です。' },
+  saddle:{ label:'鞍面', dist:4.8,
+    X:(u,v)=>[u, 0.62*(u*u-v*v), v],
+    uMin:-1.35,uMax:1.35,vMin:-1.35,vMax:1.35,
+    note:'双曲放物面は K<0。主曲率の符号が逆 (k₁>0>k₂)。中心付近で主方向が ±45° に交わります。' },
+  monkey:{ label:'猿の鞍', dist:4.6,
+    X:(u,v)=>[u, 0.5*(u*u*u-3*u*v*v), v],
+    uMin:-1.2,uMax:1.2,vMin:-1.2,vMax:1.2,
+    note:'猿の鞍 z=x³−3xy²。中心は K=0 の平坦点で、主方向の場が特異にねじれます。' },
+  catenoid:{ label:'カテノイド', dist:4.8,
+    X:(u,v)=>[Math.cosh(u)*Math.cos(v), u, Math.cosh(u)*Math.sin(v)],
+    uMin:-1.25,uMax:1.25,vMin:0,vMax:2*Math.PI,
+    note:'カテノイドは極小曲面：H=0 が全体で成り立ちます（k₁=−k₂）。平均曲率流の停留曲面で、H 表示は一様に白（0）になります。' },
+};
+let SF=SURFACES.sphere;
+const Xp=(u,v)=>SF.X(u,v);
+
+//---------------------------- 微分量（差分） ----------------------------
+const H1=1e-3, H2=2e-3;
+function Xu(u,v){ const a=Xp(u+H1,v),b=Xp(u-H1,v); return [(a[0]-b[0])/(2*H1),(a[1]-b[1])/(2*H1),(a[2]-b[2])/(2*H1)]; }
+function Xv(u,v){ const a=Xp(u,v+H1),b=Xp(u,v-H1); return [(a[0]-b[0])/(2*H1),(a[1]-b[1])/(2*H1),(a[2]-b[2])/(2*H1)]; }
+
+// E,F,G,L,M,N と外向きに揃えた法線。S.centroid を使って法線の向きを統一
+function fundForms(u,v){
+  const xu=Xu(u,v), xv=Xv(u,v);
+  const E=dot(xu,xu),F=dot(xu,xv),G=dot(xv,xv);
+  let n=normalize(cross(xu,xv));
+  const p=Xp(u,v);
+  // 法線の向きは曲面ごとに「一定の符号」で揃える。点ごとに重心との内積で反転すると、
+  // 鞍面などでは符号が領域内で不連続になり H・k₁・k₂ の表示が破綻するため。
+  // S.normalSign は buildMesh で大域的に一度だけ決める（凸=正：球などで H>0、平均曲率流ツールと整合）。
+  // K=(LN−M²)/(EG−F²) は法線の向きに依らず不変。
+  if(S.normalSign<0){ n=[-n[0],-n[1],-n[2]]; }
+  const c=p;
+  const xpp=Xp(u+H2,v), xmm=Xp(u-H2,v);
+  const Xuu=[(xpp[0]-2*c[0]+xmm[0])/(H2*H2),(xpp[1]-2*c[1]+xmm[1])/(H2*H2),(xpp[2]-2*c[2]+xmm[2])/(H2*H2)];
+  const ypp=Xp(u,v+H2), ymm=Xp(u,v-H2);
+  const Xvv=[(ypp[0]-2*c[0]+ymm[0])/(H2*H2),(ypp[1]-2*c[1]+ymm[1])/(H2*H2),(ypp[2]-2*c[2]+ymm[2])/(H2*H2)];
+  const pp=Xp(u+H2,v+H2),pm=Xp(u+H2,v-H2),mp=Xp(u-H2,v+H2),mm=Xp(u-H2,v-H2);
+  const Xuv=[(pp[0]-pm[0]-mp[0]+mm[0])/(4*H2*H2),(pp[1]-pm[1]-mp[1]+mm[1])/(4*H2*H2),(pp[2]-pm[2]-mp[2]+mm[2])/(4*H2*H2)];
+  const L=dot(Xuu,n),M=dot(Xuv,n),N=dot(Xvv,n);
+  return {E,F,G,L,M,N,xu,xv,n,det:E*G-F*F};
+}
+function curvKH(u,v){
+  const f=fundForms(u,v); const det=f.det||1e-12;
+  const K=(f.L*f.N-f.M*f.M)/det;
+  const Hm=(f.E*f.N-2*f.F*f.M+f.G*f.L)/(2*det);
+  return {K,H:Hm,f};
+}
+// 主曲率 k1>=k2 と主方向（3D 単位ベクトル）
+function principal(u,v){
+  const {K,H,f}=curvKH(u,v);
+  const disc=Math.max(0,H*H-K), s=Math.sqrt(disc);
+  const k1=H+s, k2=H-s;
+  // 形状作用素 S = I^{-1} II （u,v 基底）
+  const det=f.det||1e-12;
+  const s11=(f.G*f.L-f.F*f.M)/det, s12=(f.G*f.M-f.F*f.N)/det;
+  const s21=(f.E*f.M-f.F*f.L)/det, s22=(f.E*f.N-f.F*f.M)/det;
+  function eigVec(k){
+    // (S - kI)(a,b)=0
+    let a,b;
+    if(Math.abs(s12)>1e-9 || Math.abs(s11-k)>1e-9){ a=s12; b=k-s11; }
+    else { a=k-s22; b=s21; }
+    if(Math.hypot(a,b)<1e-9){ a=1; b=0; }
+    const d=[a*f.xu[0]+b*f.xv[0], a*f.xu[1]+b*f.xv[1], a*f.xu[2]+b*f.xv[2]];
+    return normalize(d);
+  }
+  return {k1,k2,K,H, d1:eigVec(k1), d2:eigVec(k2), n:f.n, umbilic:s<1e-3};
+}
+
+//---------------------------- 状態 ----------------------------
+let S={
+  mode:'K', showDirs:true, wire:false, spin:false,
+  cam:{az:0.6,el:0.35,dist:4.6,focal:0},
+  nv:0,nf:0, mx:null,my:null,mz:null, mU:null,mV:null, mK:null,mH:null,mk1:null,mk2:null,
+  faces:null, SX:null,SY:null,RZ:null, centroid:null, normalSign:1, scale:2,
+  inspect:null,  // {u,v}
+};
+
+function buildMesh(){
+  const NU=60,NV=60;
+  const uMin=SF.uMin,uMax=SF.uMax,vMin=SF.vMin,vMax=SF.vMax;
+  const P=[],UU=[],VV=[];
+  for(let i=0;i<=NU;i++){ const u=uMin+(uMax-uMin)*i/NU;
+    for(let j=0;j<=NV;j++){ const v=vMin+(vMax-vMin)*j/NV; P.push(Xp(u,v)); UU.push(u); VV.push(v); } }
+  const nv=P.length; const idx=(i,j)=>i*(NV+1)+j; const faces=[];
+  for(let i=0;i<NU;i++) for(let j=0;j<NV;j++){
+    faces.push(idx(i,j),idx(i+1,j),idx(i+1,j+1)); faces.push(idx(i,j),idx(i+1,j+1),idx(i,j+1)); }
+  S.nv=nv; S.nf=faces.length/3;
+  S.mx=new Float64Array(nv);S.my=new Float64Array(nv);S.mz=new Float64Array(nv);
+  S.mU=new Float64Array(nv);S.mV=new Float64Array(nv);
+  S.mK=new Float64Array(nv);S.mH=new Float64Array(nv);S.mk1=new Float64Array(nv);S.mk2=new Float64Array(nv);
+  let cx=0,cy=0,cz=0;
+  for(let i=0;i<nv;i++){ S.mx[i]=P[i][0];S.my[i]=P[i][1];S.mz[i]=P[i][2]; cx+=P[i][0];cy+=P[i][1];cz+=P[i][2]; }
+  S.centroid=[cx/nv,cy/nv,cz/nv];
+  // 法線の大域的な向きを一度だけ決める：平均的に外向き(g>0)なら反転して「凸=正」に揃える。
+  // これで面全体で符号が連続になる（点ごとの反転による鞍面での不連続を防ぐ）。
+  let g=0;
+  for(let i=0;i<nv;i++){ const xu=Xu(UU[i],VV[i]), xv=Xv(UU[i],VV[i]); const np=normalize(cross(xu,xv));
+    g += np[0]*(P[i][0]-S.centroid[0]) + np[1]*(P[i][1]-S.centroid[1]) + np[2]*(P[i][2]-S.centroid[2]); }
+  S.normalSign = g>0 ? -1 : 1;
+  let sc=0;
+  for(let i=0;i<nv;i++){
+    S.mU[i]=UU[i]; S.mV[i]=VV[i];
+    const pr=principal(UU[i],VV[i]);
+    S.mK[i]=pr.K; S.mH[i]=pr.H; S.mk1[i]=pr.k1; S.mk2[i]=pr.k2;
+    const r=Math.hypot(P[i][0]-S.centroid[0],P[i][1]-S.centroid[1],P[i][2]-S.centroid[2]); if(r>sc)sc=r;
+  }
+  S.faces=new Int32Array(faces); S.scale=sc||2;
+  S.SX=new Float64Array(nv);S.SY=new Float64Array(nv);S.RZ=new Float64Array(nv);
+}
+function field(){ return S.mode==='K'?S.mK : S.mode==='H'?S.mH : S.mode==='k1'?S.mk1 : S.mk2; }
+function fieldMaxAbs(){ const a=field(); let m=1e-9; for(let i=0;i<S.nv;i++){ const v=Math.abs(a[i]); if(isFinite(v)&&v>m)m=v; } return m; }
+
+//---------------------------- ビュー ----------------------------
+function resize(){
+  const r=cv.parentElement.getBoundingClientRect(); const dpr=window.devicePixelRatio||1;
+  cv.width=Math.floor(r.width*dpr); cv.height=Math.floor(r.height*dpr); ctx.setTransform(dpr,0,0,dpr,0,0);
+  S.cam.focal=Math.min(r.width,r.height)*0.62; draw();
+}
+function rotate(x,y,z){
+  const ca=Math.cos(S.cam.az),sa=Math.sin(S.cam.az),ce=Math.cos(S.cam.el),se=Math.sin(S.cam.el);
+  const x1=x*ca+z*sa, z1=-x*sa+z*ca, y1=y;
+  return [x1, y1*ce-z1*se, y1*se+z1*ce];
+}
+function curvColor(v,maxAbs,shade){
+  const t=Math.max(-1,Math.min(1, maxAbs>1e-9? v/maxAbs:0));
+  let r,g,b;
+  if(t>=0){ r=229+(239-229)*t; g=231-(231-68)*t; b=235-(235-68)*t; }
+  else { const a=-t; r=229-(229-59)*a; g=231-(231-130)*a; b=235+(246-235)*a; }
+  return `rgb(${(r*shade)|0},${(g*shade)|0},${(b*shade)|0})`;
+}
+
+//---------------------------- 描画 ----------------------------
+function draw(){
+  const r=cv.parentElement.getBoundingClientRect();
+  ctx.clearRect(0,0,r.width,r.height); if(S.nv===0) return;
+  const f=S.cam.focal,d=S.cam.dist,cx=r.width/2,cy=r.height/2;
+  const RX=new Float64Array(S.nv),RY=new Float64Array(S.nv);
+  for(let i=0;i<S.nv;i++){ const rp=rotate(S.mx[i],S.my[i],S.mz[i]); RX[i]=rp[0];RY[i]=rp[1];S.RZ[i]=rp[2];
+    const depth=d-rp[2]; S.SX[i]=cx+f*rp[0]/depth; S.SY[i]=cy-f*rp[1]/depth; }
+  const fld=field(), maxAbs=fieldMaxAbs();
+  const F=S.faces,order=new Array(S.nf),fz=new Float64Array(S.nf);
+  for(let q=0;q<S.nf;q++){ const a=F[3*q],b=F[3*q+1],c=F[3*q+2]; fz[q]=(S.RZ[a]+S.RZ[b]+S.RZ[c])/3; order[q]=q; }
+  order.sort((p,q)=>fz[p]-fz[q]);
+  const L=normalize([0.35,0.45,0.82]);
+  for(let o=0;o<S.nf;o++){
+    const q=order[o],a=F[3*q],b=F[3*q+1],c=F[3*q+2];
+    const ux=RX[b]-RX[a],uy=RY[b]-RY[a],uz=S.RZ[b]-S.RZ[a];
+    const vx=RX[c]-RX[a],vy=RY[c]-RY[a],vz=S.RZ[c]-S.RZ[a];
+    let nx=uy*vz-uz*vy,ny=uz*vx-ux*vz,nz=ux*vy-uy*vx; const nl=Math.hypot(nx,ny,nz)||1; nx/=nl;ny/=nl;nz/=nl;
+    if(S.wire){ if(nz<=0) continue;
+      ctx.beginPath();ctx.moveTo(S.SX[a],S.SY[a]);ctx.lineTo(S.SX[b],S.SY[b]);ctx.lineTo(S.SX[c],S.SY[c]);ctx.closePath();
+      ctx.strokeStyle='rgba(120,170,230,0.4)';ctx.lineWidth=0.6;ctx.stroke(); continue; }
+    const lam=Math.max(0,Math.abs(nx*L[0]+ny*L[1]+nz*L[2])); const shade=0.34+0.66*lam;
+    const val=(fld[a]+fld[b]+fld[c])/3;
+    const fill=curvColor(val,maxAbs,shade);
+    ctx.beginPath();ctx.moveTo(S.SX[a],S.SY[a]);ctx.lineTo(S.SX[b],S.SY[b]);ctx.lineTo(S.SX[c],S.SY[c]);ctx.closePath();
+    ctx.fillStyle=fill;ctx.fill();ctx.strokeStyle=fill;ctx.lineWidth=0.5;ctx.stroke();
+  }
+  if(S.showDirs && !S.wire) drawDirField(r);
+  if(S.inspect) drawInspect(r);
+}
+
+// 主方向の場（曲率線）：粗いグリッドで十字を描く
+function drawDirField(r){
+  const d=S.cam.dist,f=S.cam.focal,cx=r.width/2,cy=r.height/2;
+  const NU=15,NV=15, len=0.085*S.scale;
+  const uMin=SF.uMin,uMax=SF.uMax,vMin=SF.vMin,vMax=SF.vMax;
+  for(let i=1;i<NU;i++){ const u=uMin+(uMax-uMin)*i/NU;
+    for(let j=1;j<NV;j++){ const v=vMin+(vMax-vMin)*j/NV;
+      const p=Xp(u,v);
+      const pr=principal(u,v);            // 法線も pr.n で取得（fundForms の二重計算を回避）
+      const rn=rotate(pr.n[0],pr.n[1],pr.n[2]); if(rn[2]<=0.02) continue; // 前面のみ
+      if(pr.umbilic) continue;
+      seg(p,pr.d1,len, 'rgba(255,122,89,0.9)', 1.4, r);
+      seg(p,pr.d2,len, 'rgba(86,180,255,0.9)', 1.4, r);
+    }
+  }
+}
+function seg(p,dir,len,color,w,r){
+  const d=S.cam.dist,f=S.cam.focal,cx=r.width/2,cy=r.height/2;
+  const a=[p[0]-dir[0]*len,p[1]-dir[1]*len,p[2]-dir[2]*len];
+  const b=[p[0]+dir[0]*len,p[1]+dir[1]*len,p[2]+dir[2]*len];
+  const ra=rotate(a[0],a[1],a[2]), rb=rotate(b[0],b[1],b[2]);
+  const da=d-ra[2], db=d-rb[2];
+  ctx.beginPath(); ctx.moveTo(cx+f*ra[0]/da, cy-f*ra[1]/da); ctx.lineTo(cx+f*rb[0]/db, cy-f*rb[1]/db);
+  ctx.strokeStyle=color; ctx.lineWidth=w; ctx.stroke();
+}
+function drawInspect(r){
+  const d=S.cam.dist,f=S.cam.focal,cx=r.width/2,cy=r.height/2;
+  const u=S.inspect.u,v=S.inspect.v; const p=Xp(u,v); const rp=rotate(p[0],p[1],p[2]); const depth=d-rp[2];
+  const sx=cx+f*rp[0]/depth, sy=cy-f*rp[1]/depth;
+  const pr=principal(u,v); const len=0.18*S.scale;
+  if(!pr.umbilic){ seg(p,pr.d1,len,'#ff7a59',2.6,r); seg(p,pr.d2,len,'#56b4ff',2.6,r); }
+  ctx.beginPath(); ctx.arc(sx,sy,5,0,2*Math.PI); ctx.fillStyle='#ffffff'; ctx.fill();
+  ctx.lineWidth=2; ctx.strokeStyle='#1c232d'; ctx.stroke();
+}
+
+//---------------------------- ピック ----------------------------
+function pickUV(mx,my){
+  const F=S.faces; let bestZ=-Infinity,uu=null,vv=null;
+  for(let q=0;q<S.nf;q++){ const a=F[3*q],b=F[3*q+1],c=F[3*q+2];
+    const ax=S.SX[a],ay=S.SY[a],bx=S.SX[b],by=S.SY[b],cx2=S.SX[c],cy2=S.SY[c];
+    const dnm=(by-cy2)*(ax-cx2)+(cx2-bx)*(ay-cy2); if(Math.abs(dnm)<1e-9) continue;
+    const w0=((by-cy2)*(mx-cx2)+(cx2-bx)*(my-cy2))/dnm;
+    const w1=((cy2-ay)*(mx-cx2)+(ax-cx2)*(my-cy2))/dnm; const w2=1-w0-w1;
+    if(w0<-0.02||w1<-0.02||w2<-0.02) continue;
+    const z=(S.RZ[a]+S.RZ[b]+S.RZ[c])/3;
+    if(z>bestZ){ bestZ=z; uu=w0*S.mU[a]+w1*S.mU[b]+w2*S.mU[c]; vv=w0*S.mV[a]+w1*S.mV[b]+w2*S.mV[c]; } }
+  return uu===null?null:{u:uu,v:vv};
+}
+function updateReadout(){
+  const el=id=>document.getElementById(id);
+  if(!S.inspect){ el('ro-K').textContent='—';el('ro-H').textContent='—';el('ro-k1').textContent='—';el('ro-k2').textContent='—';el('ro-type').textContent='—'; return; }
+  const pr=principal(S.inspect.u,S.inspect.v);
+  el('ro-K').textContent=pr.K.toFixed(3); el('ro-H').textContent=pr.H.toFixed(3);
+  el('ro-k1').textContent=pr.k1.toFixed(3); el('ro-k2').textContent=pr.k2.toFixed(3);
+  let type;
+  if(pr.umbilic) type='臍点 (k₁=k₂)';
+  else if(Math.abs(pr.K)<0.02) type='放物点 (K≈0)';
+  else if(pr.K>0) type='楕円点 (K>0, 凸)';
+  else type='双曲点 (K<0, 鞍)';
+  el('ro-type').textContent=type;
+}
+
+//---------------------------- ロード ----------------------------
+function loadSurface(key){
+  SF=SURFACES[key]; S.centroid=null; buildMesh();
+  // 中心の点を初期 inspect に
+  S.inspect={u:(SF.uMin+SF.uMax)/2, v:(SF.vMin+SF.vMax)/2};
+  S.cam.az=0.6; S.cam.el=0.35; S.cam.dist=SF.dist||4.8;
+  document.getElementById('note').innerHTML=SF.note;
+  updateStatus(); updateReadout(); updateLegendNote(); draw();
+}
+function updateStatus(){
+  const names={K:'ガウス曲率 K',H:'平均曲率 H',k1:'主曲率 k₁',k2:'主曲率 k₂'};
+  document.getElementById('status').innerHTML='曲面: <b>'+SF.label+'</b> &nbsp; 表示: <b>'+names[S.mode]+'</b>';
+}
+function updateLegendNote(){
+  const m=fieldMaxAbs();
+  document.getElementById('legend-note').textContent='スケール: ±'+m.toFixed(2)+'（白=0）';
+}
+
+//---------------------------- 操作 ----------------------------
+let dragging=false,lastX=0,lastY=0,moved=false;
+cv.addEventListener('pointerdown',e=>{ dragging=true;moved=false;lastX=e.clientX;lastY=e.clientY; cv.setPointerCapture(e.pointerId); });
+cv.addEventListener('pointermove',e=>{ if(!dragging) return;
+  if(Math.abs(e.clientX-lastX)+Math.abs(e.clientY-lastY)>2) moved=true;
+  S.cam.az+=(e.clientX-lastX)*0.008; S.cam.el+=(e.clientY-lastY)*0.008;
+  S.cam.el=Math.max(-1.45,Math.min(1.45,S.cam.el)); lastX=e.clientX;lastY=e.clientY; draw(); });
+cv.addEventListener('pointerup',e=>{ dragging=false;
+  if(!moved){ const rect=cv.getBoundingClientRect(); const uv=pickUV(e.clientX-rect.left,e.clientY-rect.top);
+    if(uv){ S.inspect=uv; updateReadout(); draw(); } } });
+cv.addEventListener('wheel',e=>{ e.preventDefault(); S.cam.dist*=Math.exp(e.deltaY*0.0012); S.cam.dist=Math.max(2.6,Math.min(13,S.cam.dist)); draw(); },{passive:false});
+
+//---------------------------- UI ----------------------------
+function bindUI(){
+  document.querySelectorAll('[data-surf]').forEach(b=>b.addEventListener('click',()=>loadSurface(b.dataset.surf)));
+  document.querySelectorAll('.cmode').forEach(b=>b.addEventListener('click',()=>{
+    S.mode=b.dataset.mode; document.querySelectorAll('.cmode').forEach(x=>x.classList.toggle('active',x===b));
+    updateStatus(); updateLegendNote(); draw(); }));
+  document.getElementById('opt-dirs').addEventListener('change',e=>{ S.showDirs=e.target.checked; draw(); });
+  document.getElementById('opt-wire').addEventListener('change',e=>{ S.wire=e.target.checked; draw(); });
+  document.getElementById('opt-spin').addEventListener('change',e=>{ S.spin=e.target.checked; });
+  window.addEventListener('resize',resize);
+}
+function frame(){ if(S.spin && !dragging){ S.cam.az+=0.004; draw(); } requestAnimationFrame(frame); }
+
+bindUI(); resize(); loadSurface('torus'); requestAnimationFrame(frame);
+</script>
+</body>
+</html>
