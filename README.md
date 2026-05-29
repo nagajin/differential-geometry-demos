@@ -70,4 +70,4 @@ $$\iint_T K\, dA = \big(\theta_A+\theta_B+\theta_C\big) - \pi$$
 
 ## ライセンス
 
-MIT License
+[MIT License](LICENSE) © 2026 長塚 悠仁 (Yuto Nagatsuka)
