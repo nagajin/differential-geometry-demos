@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>微分形式の幾何 — 1形式・2形式・外微分</title>
+<style>
+  :root {
+    --bg:#0e1116; --panel:#161b22; --panel2:#1c232d; --border:#2a323d;
+    --text:#d6dde6; --muted:#8b97a6; --accent:#4ea1ff; --accent2:#ffb454; --good:#5ad19a; --bad:#ff6b6b;
+  }
+  * { box-sizing:border-box; }
+  html,body { margin:0; padding:0; height:100%; background:var(--bg); color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,sans-serif; }
+  #app { display:flex; height:100vh; overflow:hidden; }
+  #stage { flex:1; position:relative; min-width:0; }
+  canvas { display:block; width:100%; height:100%; background:radial-gradient(circle at 50% 42%,#131a24 0%,#0e1116 80%); cursor:crosshair; }
+  #sidebar { width:340px; flex:0 0 340px; background:var(--panel); border-left:1px solid var(--border);
+    overflow-y:auto; padding:16px 16px 40px; font-size:13px; }
+  h1 { font-size:15px; margin:0 0 2px; }
+  .sub { color:var(--muted); font-size:11px; margin:0 0 12px; line-height:1.5; }
+  .nav { font-size:11px; margin:0 0 12px; }
+  .nav a { color:var(--accent); text-decoration:none; }
+  .nav a:hover { text-decoration:underline; }
+  .group { background:var(--panel2); border:1px solid var(--border); border-radius:10px; padding:12px; margin-bottom:12px; }
+  .group h2 { font-size:12px; margin:0 0 10px; color:var(--accent); font-weight:600; }
+  .btn-row { display:flex; gap:6px; flex-wrap:wrap; }
+  button { background:#233040; color:var(--text); border:1px solid var(--border); border-radius:8px;
+    padding:7px 9px; font-size:12px; cursor:pointer; font-family:inherit; }
+  button:hover { background:#2c3c50; } button.active{ background:var(--accent2);color:#2a1c05;border-color:var(--accent2);font-weight:600; }
+  button.wide{ flex:1; }
+  select { width:100%; background:#233040; color:var(--text); border:1px solid var(--border); border-radius:8px; padding:7px; font-size:12px; font-family:inherit; }
+  label.row { display:flex; align-items:center; justify-content:space-between; gap:8px; margin:9px 0; }
+  label.row span.lab { color:var(--muted); flex:0 0 auto; } label.row span.val{ color:var(--text); font-variant-numeric:tabular-nums; min-width:52px; text-align:right; }
+  input[type=range]{ flex:1; accent-color:var(--accent); }
+  .check{ display:flex; align-items:center; gap:8px; margin:8px 0; cursor:pointer; } .check input{ accent-color:var(--accent); width:15px;height:15px; }
+  #ro{ font-variant-numeric:tabular-nums; line-height:1.8; } #ro .m{ display:flex; justify-content:space-between; }
+  #ro .key{ color:var(--accent2); } #thm .m{ display:flex; justify-content:space-between; } #thm .lhs{color:var(--accent2);} #thm .rhs{color:var(--good);}
+  #thm .match{ text-align:center; margin-top:8px; font-weight:600; padding:5px; border-radius:7px; } #thm .match.ok{ background:rgba(90,209,154,.12); color:var(--good);} #thm .match.no{ background:rgba(255,107,107,.12); color:var(--bad);}
+  #status{ position:absolute; top:14px; left:16px; font-size:12px; color:var(--muted); background:rgba(14,17,22,.7); padding:6px 10px; border-radius:8px; border:1px solid var(--border); pointer-events:none; backdrop-filter:blur(4px);} #status b{color:var(--accent2);}
+  #hintbar{ position:absolute; bottom:12px; left:16px; font-size:11px; color:var(--muted); background:rgba(14,17,22,.6); padding:5px 9px; border-radius:7px; pointer-events:none;}
+  .hint{ color:var(--muted); font-size:11px; line-height:1.55; margin-top:6px; } hr.sep{ border:none; border-top:1px solid var(--border); margin:10px 0;}
+  code{ background:#0e1116; padding:1px 5px; border-radius:4px; color:var(--accent2); font-size:11px;}
+  .formula{ background:#0e1116; border:1px solid var(--border); border-radius:8px; padding:8px 10px; font-size:12.5px; text-align:center; margin:2px 0 4px;}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="stage">
+    <canvas id="cv"></canvas>
+    <div id="status"></div>
+    <div id="hintbar">点 P とベクトル v の先端をドラッグできます</div>
+  </div>
+  <div id="sidebar">
+    <h1>微分形式の幾何</h1>
+    <p class="sub">1形式を平行線の「層 (stack)」、2形式を向きつき面積セルで描き、外微分 d とストークスを可視化します（2次元）。</p>
+    <p class="nav">▸ <a href="https://nagajin.github.io/differential-geometry-demos/">デモ一覧</a> &nbsp;/&nbsp; <a href="integral-theorems.html">3大積分定理</a></p>
+
+    <div class="formula">ω = P dx + Q dy &nbsp;⟶&nbsp; dω = (∂Q/∂x − ∂P/∂y) dx∧dy</div>
+
+    <div class="group">
+      <h2>1形式 ω</h2>
+      <select id="form">
+        <option value="dx">dx</option>
+        <option value="xdy">x dy</option>
+        <option value="rot">−y dx + x dy</option>
+        <option value="exact">y dx + x dy = d(xy)（完全形式）</option>
+      </select>
+      <div class="hint" id="form-hint"></div>
+    </div>
+
+    <div class="group">
+      <h2>ペアリング ω(v)</h2>
+      <div id="ro">
+        <div class="m"><span>点 P</span><span id="ro-p">—</span></div>
+        <div class="m"><span>ω|<sub>P</sub> = (P, Q)</span><span id="ro-w">—</span></div>
+        <div class="m"><span>ベクトル v</span><span id="ro-v">—</span></div>
+        <div class="m"><span class="key">ω(v) = P·v<sub>x</sub>+Q·v<sub>y</sub></span><span class="key" id="ro-wv">—</span></div>
+      </div>
+      <div class="hint">ω(v) は「v が層の線を横切る本数」（符号つき）に等しい。線が密＝ω が大きい。</div>
+    </div>
+
+    <div class="group">
+      <h2>表示</h2>
+      <label class="check"><input type="checkbox" id="opt-stack" checked> 1形式 ω の層（平行線）</label>
+      <label class="check"><input type="checkbox" id="opt-dw" checked> 外微分 dω（2形式）を色で表示</label>
+      <label class="check"><input type="checkbox" id="opt-cell"> 2形式の向きセルを表示</label>
+    </div>
+
+    <div class="group">
+      <h2>一般化ストークス ∮<sub>∂R</sub> ω = ∬<sub>R</sub> dω</h2>
+      <div class="btn-row"><button class="wide reg active" data-r="disk">円板</button><button class="wide reg" data-r="square">正方形</button></div>
+      <label class="row"><span class="lab">領域サイズ R</span><input id="size" type="range" min="0.4" max="1.4" step="0.05" value="0.9"><span class="val" id="size-v">0.90</span></label>
+      <div id="thm">
+        <div class="m"><span class="lhs">左辺 ∮<sub>∂R</sub> ω</span><span class="lhs" id="thm-l">—</span></div>
+        <div class="m"><span class="rhs">右辺 ∬<sub>R</sub> dω</span><span class="rhs" id="thm-r">—</span></div>
+        <div class="match" id="thm-match">—</div>
+      </div>
+    </div>
+
+    <div class="group">
+      <h2>解説</h2>
+      <div class="hint">
+        <b>1形式</b>はベクトルに数を返す線形写像。幾何的には「等間隔の平行線の層」で、ω(v) は v が横切る線の本数です。<b>外微分</b> d は 1形式から<b>2形式</b> dω を作り、2次元では dω=(Q<sub>x</sub>−P<sub>y</sub>)dx∧dy（＝回転）。<b>完全形式</b> df は必ず閉 (d(df)=0)。
+        <hr class="sep">
+        <b>一般化ストークス</b> <code>∮<sub>∂R</sub>ω = ∬<sub>R</sub>dω</code> はグリーンの定理そのもの。3次元の rot・div（ストークス・発散定理）も同じ枠組みで、<a href="integral-theorems.html" style="color:var(--accent)">3大積分定理デモ</a>で扱います。
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+const cv=document.getElementById('cv'); const ctx=cv.getContext('2d');
+
+//---------------------------- 1形式の定義 ----------------------------
+const FORMS={
+  dx:{ f:(x,y)=>[1,0], hint:'最も基本的な1形式。一様な平行線の層。dω=0（閉形式）。' },
+  xdy:{ f:(x,y)=>[0,x], hint:'x dy。右へ行くほど層が密（ω が大きい）。dω = dx∧dy（一定の2形式）。' },
+  rot:{ f:(x,y)=>[-y,x], hint:'回転的な1形式。dω = 2 dx∧dy。原点まわりを一周すると ∮ω = 2×面積。' },
+  exact:{ f:(x,y)=>[y,x], hint:'完全形式 d(xy)。閉曲線上の積分は 0、dω=0（完全⇒閉）。' },
+};
+let FID='xdy'; const W=(x,y)=>FORMS[FID].f(x,y);
+const h=1e-4;
+function dW(x,y){ // (Qx − Py)
+  return (W(x+h,y)[1]-W(x-h,y)[1])/(2*h) - (W(x,y+h)[0]-W(x,y-h)[0])/(2*h);
+}
+
+//---------------------------- 状態 ----------------------------
+let S={ P:[0.45,0.30], V:[0.7,0.55], region:'disk', R:0.9,
+  showStack:true, showDw:true, showCell:false, view:1.75 };
+
+//---------------------------- 座標 ----------------------------
+let SC=1, CX=0, CY=0;
+function resize(){ const r=cv.parentElement.getBoundingClientRect(), dpr=window.devicePixelRatio||1;
+  cv.width=Math.floor(r.width*dpr); cv.height=Math.floor(r.height*dpr); ctx.setTransform(dpr,0,0,dpr,0,0);
+  CX=r.width/2; CY=r.height/2; SC=Math.min(r.width,r.height)*0.40/S.view; draw(); }
+function w2s(x,y){ return [CX+x*SC, CY-y*SC]; }
+function s2w(sx,sy){ return [(sx-CX)/SC, -(sy-CY)/SC]; }
+
+//---------------------------- 計算（ストークス） ----------------------------
+function computeStokes(){
+  const R=S.R; let lhs=0;
+  if(S.region==='disk'){ const N=720; for(let k=0;k<N;k++){ const t=2*Math.PI*k/N, dt=2*Math.PI/N;
+    const x=R*Math.cos(t), y=R*Math.sin(t); const dx=-R*Math.sin(t)*dt, dy=R*Math.cos(t)*dt; const w=W(x,y); lhs+=w[0]*dx+w[1]*dy; } }
+  else { const seg=(x0,y0,x1,y1)=>{ const M=400; for(let k=0;k<M;k++){ const t=(k+0.5)/M; const x=x0+(x1-x0)*t,y=y0+(y1-y0)*t; const dx=(x1-x0)/M,dy=(y1-y0)/M; const w=W(x,y); lhs+=w[0]*dx+w[1]*dy; } };
+    seg(-R,-R,R,-R); seg(R,-R,R,R); seg(R,R,-R,R); seg(-R,R,-R,-R); }
+  let rhs=0; const G=200, d=(2*R)/G, cell=d*d;
+  for(let i=0;i<G;i++){ const x=-R+(i+0.5)*d; for(let j=0;j<G;j++){ const y=-R+(j+0.5)*d;
+    if(S.region==='disk' && x*x+y*y>R*R) continue; rhs+=dW(x,y)*cell; } }
+  return {lhs,rhs};
+}
+
+//---------------------------- 描画 ----------------------------
+function colorOf(t){ t=Math.max(-1,Math.min(1,t)); let R,G,B;
+  if(t>=0){ R=229+(239-229)*t; G=231-(231-68)*t; B=235-(235-68)*t; } else { const a=-t; R=229-(229-59)*a; G=231-(231-130)*a; B=235+(246-235)*a; }
+  return `rgb(${R|0},${G|0},${B|0})`; }
+
+function draw(){
+  const r=cv.parentElement.getBoundingClientRect(); ctx.clearRect(0,0,r.width,r.height);
+  const ext=S.view;
+  // dω（2形式）の色
+  if(S.showDw){ const G=54, d=(2*ext)/G; let vmax=1e-9; const vals=[];
+    for(let i=0;i<G;i++){ const x=-ext+(i+0.5)*d; for(let j=0;j<G;j++){ const y=-ext+(j+0.5)*d; const g=dW(x,y); vals.push(g); if(Math.abs(g)>vmax)vmax=Math.abs(g); } }
+    let idx=0; ctx.globalAlpha=0.42;
+    for(let i=0;i<G;i++){ const x=-ext+(i+0.5)*d; for(let j=0;j<G;j++){ const y=-ext+(j+0.5)*d; const g=vals[idx++]; if(Math.abs(g)<vmax*1e-3 && vmax<1e-6){} const p=w2s(x,y);
+      ctx.fillStyle=colorOf(vmax>1e-9?g/vmax:0); ctx.fillRect(p[0]-d*SC/2-0.5,p[1]-d*SC/2-0.5,d*SC+1,d*SC+1); } }
+    ctx.globalAlpha=1;
+  }
+  // 軸
+  ctx.strokeStyle='rgba(255,255,255,0.12)'; ctx.lineWidth=1; const o=w2s(0,0);
+  ctx.beginPath(); ctx.moveTo(0,o[1]); ctx.lineTo(r.width,o[1]); ctx.moveTo(o[0],0); ctx.lineTo(o[0],r.height); ctx.stroke();
+  // 2形式の向きセル（dω の符号で反時計/時計の小ループ）
+  if(S.showCell){ const M=11, step=2*ext/M;
+    for(let i=0;i<=M;i++){ const x=-ext+2*ext*i/M; for(let j=0;j<=M;j++){ const y=-ext+2*ext*j/M; const g=dW(x,y); if(Math.abs(g)<1e-3) continue;
+      const p=w2s(x,y); const rad=Math.min(13, 4+Math.abs(g)*4); const ccw=g>0;
+      ctx.strokeStyle=g>0?'rgba(239,68,68,0.8)':'rgba(59,130,246,0.8)'; ctx.lineWidth=1.4;
+      ctx.beginPath(); ctx.arc(p[0],p[1],rad,0.3,2*Math.PI-0.3, !ccw); ctx.stroke();
+      const a=ccw?(2*Math.PI-0.3):0.3; const ax=p[0]+rad*Math.cos(a), ay=p[1]+rad*Math.sin(a); const dir=ccw?1:-1;
+      ctx.beginPath(); ctx.moveTo(ax,ay); ctx.lineTo(ax-dir*5*Math.sin(a)-4*Math.cos(a), ay+dir*5*Math.cos(a)-4*Math.sin(a)); ctx.stroke();
+    } }
+  }
+  // 1形式の層（stack）：各格子点に、(P,Q)に垂直な平行線を間隔 1/|ω| で
+  if(S.showStack){ const M=15, step=2*ext/M, hw=step*0.46;
+    ctx.lineWidth=1.2;
+    for(let i=0;i<=M;i++){ const x=-ext+2*ext*i/M; for(let j=0;j<=M;j++){ const y=-ext+2*ext*j/M;
+      const w=W(x,y); const m=Math.hypot(w[0],w[1]); if(m<1e-6) continue;
+      const nx=w[0]/m, ny=w[1]/m;        // 法線（covector 方向）
+      const tx=-ny, ty=nx;               // 線の方向（kernel）
+      let sp=1/m;                        // 世界座標での線間隔
+      const spS=sp*SC;                   // 画面間隔
+      const p0=w2s(x,y); const halfLen=hw*SC;
+      ctx.strokeStyle='rgba(120,170,230,0.7)';
+      const K=Math.min(3, Math.max(0, Math.floor(hw/sp)));
+      for(let k=-K;k<=K;k++){ const off=k*spS; const cxp=p0[0]+nx*off, cyp=p0[1]-ny*off;
+        ctx.beginPath(); ctx.moveTo(cxp - tx*halfLen, cyp + ty*halfLen); ctx.lineTo(cxp + tx*halfLen, cyp - ty*halfLen); ctx.stroke(); }
+      // ＋方向の小矢印（法線 +n 向き）
+      ctx.strokeStyle='rgba(120,170,230,0.45)';
+      ctx.beginPath(); ctx.moveTo(p0[0],p0[1]); ctx.lineTo(p0[0]+nx*halfLen*0.5, p0[1]-ny*halfLen*0.5); ctx.stroke();
+    } }
+  }
+  // 領域 ∂R（黄, 向きつき）
+  drawRegion(r);
+  // 点 P と ベクトル v、ペアリングの強調
+  drawPairing(r);
+}
+
+function drawRegion(r){ const R=S.R; ctx.strokeStyle='rgba(255,224,138,0.9)'; ctx.lineWidth=2.4; ctx.beginPath();
+  const pts=[]; if(S.region==='disk'){ for(let k=0;k<=120;k++){ const t=2*Math.PI*k/120; pts.push([R*Math.cos(t),R*Math.sin(t)]); } }
+  else pts.push([-R,-R],[R,-R],[R,R],[-R,R],[-R,-R]);
+  pts.forEach((q,i)=>{ const p=w2s(q[0],q[1]); i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]); }); ctx.stroke();
+  // 向き矢印
+  ctx.fillStyle='rgba(255,224,138,0.9)'; ctx.strokeStyle='rgba(255,224,138,0.9)';
+  for(let k=0;k<8;k++){ const t=k/8; let x,y,tx,ty;
+    if(S.region==='disk'){ const th=2*Math.PI*t; x=R*Math.cos(th);y=R*Math.sin(th); tx=-Math.sin(th);ty=Math.cos(th); }
+    else { const sg=Math.floor(t*4), ft=t*4-sg; const cs=[[-R,-R],[R,-R],[R,R],[-R,R]]; const a=cs[sg],b=cs[(sg+1)%4]; x=a[0]+(b[0]-a[0])*ft;y=a[1]+(b[1]-a[1])*ft; tx=b[0]-a[0];ty=b[1]-a[1]; const mm=Math.hypot(tx,ty);tx/=mm;ty/=mm; }
+    const p=w2s(x,y); arrow(p[0]-tx*7,p[1]+ty*7,p[0]+tx*7,p[1]-ty*7,5); }
+}
+function drawPairing(r){
+  const P=S.P, V=S.V; const w=W(P[0],P[1]); const m=Math.hypot(w[0],w[1]);
+  const sp=w2s(P[0],P[1]); const tip=[P[0]+V[0],P[1]+V[1]]; const st=w2s(tip[0],tip[1]);
+  // P での層を強調（青太線）
+  if(m>1e-6){ const nx=w[0]/m, ny=w[1]/m, tx=-ny, ty=nx; const spw=1/m; const len=0.55;
+    ctx.strokeStyle='rgba(120,170,230,1)'; ctx.lineWidth=2;
+    const vlen=Math.hypot(V[0],V[1]); const K=Math.ceil(m*vlen)+1;
+    for(let k=-K;k<=K;k++){ const ox=P[0]+nx*k*spw, oy=P[1]+ny*k*spw; const a=w2s(ox-tx*len,oy-ty*len), b=w2s(ox+tx*len,oy+ty*len);
+      ctx.beginPath(); ctx.moveTo(a[0],a[1]); ctx.lineTo(b[0],b[1]); ctx.stroke(); }
+  }
+  // ベクトル v（緑の矢印）
+  ctx.strokeStyle='#5ad19a'; ctx.fillStyle='#5ad19a'; ctx.lineWidth=2.6; arrow(sp[0],sp[1],st[0],st[1],8);
+  // 点 P と v 先端のハンドル
+  ctx.beginPath(); ctx.arc(sp[0],sp[1],6,0,2*Math.PI); ctx.fillStyle='#fff'; ctx.fill(); ctx.lineWidth=2; ctx.strokeStyle='#1c232d'; ctx.stroke();
+  ctx.fillStyle='#fff'; ctx.font='bold 13px sans-serif'; ctx.fillText('P', sp[0]+9, sp[1]-7);
+  ctx.beginPath(); ctx.arc(st[0],st[1],5,0,2*Math.PI); ctx.fillStyle='#5ad19a'; ctx.fill(); ctx.strokeStyle='#10241a'; ctx.stroke();
+  ctx.fillStyle='#5ad19a'; ctx.fillText('v', st[0]+8, st[1]-6);
+  updateRO(w,m);
+}
+function arrow(x1,y1,x2,y2,ah){ ah=ah||5; const dx=x2-x1,dy=y2-y1,len=Math.hypot(dx,dy);
+  ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke(); if(len<2)return; const ux=dx/len,uy=dy/len;
+  ctx.beginPath(); ctx.moveTo(x2,y2); ctx.lineTo(x2-ah*ux-ah*0.5*uy,y2-ah*uy+ah*0.5*ux); ctx.lineTo(x2-ah*ux+ah*0.5*uy,y2-ah*uy-ah*0.5*ux); ctx.closePath(); ctx.fill(); }
+
+//---------------------------- 読み出し ----------------------------
+function updateRO(w,m){ const id=x=>document.getElementById(x);
+  id('ro-p').textContent='('+S.P[0].toFixed(2)+', '+S.P[1].toFixed(2)+')';
+  id('ro-w').textContent='('+w[0].toFixed(2)+', '+w[1].toFixed(2)+')';
+  id('ro-v').textContent='('+S.V[0].toFixed(2)+', '+S.V[1].toFixed(2)+')';
+  const wv=w[0]*S.V[0]+w[1]*S.V[1]; id('ro-wv').textContent=wv.toFixed(3);
+  const t=computeStokes(); id('thm-l').textContent=t.lhs.toFixed(4); id('thm-r').textContent=t.rhs.toFixed(4);
+  const diff=Math.abs(t.lhs-t.rhs), sc=Math.max(1,Math.abs(t.lhs),Math.abs(t.rhs)); const mm=id('thm-match');
+  if(diff/sc<0.02){ mm.className='match ok'; mm.textContent='✓ 一致（差 '+diff.toFixed(4)+'）'; } else { mm.className='match no'; mm.textContent='差 '+diff.toFixed(4); }
+  id('status').innerHTML='ω = <b>'+({dx:'dx',xdy:'x dy',rot:'−y dx + x dy',exact:'y dx + x dy'})[FID]+'</b> &nbsp; ω(v) = <b>'+wv.toFixed(2)+'</b>';
+  id('form-hint').textContent=FORMS[FID].hint;
+}
+
+//---------------------------- 操作（ドラッグ） ----------------------------
+let drag=null;
+cv.addEventListener('pointerdown',e=>{ const rect=cv.getBoundingClientRect(); const mx=e.clientX-rect.left,my=e.clientY-rect.top;
+  const sp=w2s(S.P[0],S.P[1]); const tip=w2s(S.P[0]+S.V[0],S.P[1]+S.V[1]);
+  const dP=Math.hypot(mx-sp[0],my-sp[1]), dT=Math.hypot(mx-tip[0],my-tip[1]);
+  if(dT<16 && dT<=dP) drag='tip'; else if(dP<16) drag='P'; else { drag='tip'; } cv.setPointerCapture(e.pointerId); onDrag(mx,my); });
+cv.addEventListener('pointermove',e=>{ if(!drag) return; const rect=cv.getBoundingClientRect(); onDrag(e.clientX-rect.left,e.clientY-rect.top); });
+cv.addEventListener('pointerup',()=>{ drag=null; });
+function onDrag(mx,my){ const w=s2w(mx,my);
+  if(drag==='P') S.P=[Math.max(-S.view,Math.min(S.view,w[0])), Math.max(-S.view,Math.min(S.view,w[1]))];
+  else if(drag==='tip') S.V=[w[0]-S.P[0], w[1]-S.P[1]]; draw(); }
+
+//---------------------------- UI ----------------------------
+function bindUI(){
+  document.getElementById('form').addEventListener('change',e=>{ FID=e.target.value; draw(); });
+  document.querySelectorAll('.reg').forEach(b=>b.addEventListener('click',()=>{ S.region=b.dataset.r; document.querySelectorAll('.reg').forEach(x=>x.classList.toggle('active',x===b)); draw(); }));
+  const sz=document.getElementById('size'); sz.addEventListener('input',()=>{ S.R=parseFloat(sz.value); document.getElementById('size-v').textContent=S.R.toFixed(2); draw(); });
+  document.getElementById('opt-stack').addEventListener('change',e=>{ S.showStack=e.target.checked; draw(); });
+  document.getElementById('opt-dw').addEventListener('change',e=>{ S.showDw=e.target.checked; draw(); });
+  document.getElementById('opt-cell').addEventListener('change',e=>{ S.showCell=e.target.checked; draw(); });
+  window.addEventListener('resize',resize);
+}
+bindUI(); document.getElementById('form').value=FID; resize();
+</script>
+</body>
+</html>
