@@ -51,14 +51,14 @@ $$\iint_T K\, dA = \big(\theta_A+\theta_B+\theta_C\big) - \pi$$
 グリーン・ストークス・ガウスの発散定理を、**左辺（境界での積分）と右辺（rot / div の内部積分）を数値計算して一致**させて確かめます。
 
 - **グリーン** (2D): $\oint_{\partial D}(P\,dx+Q\,dy)=\iint_D(\partial_x Q-\partial_y P)\,dA$
-- **ストークス** (3D): $\oint_{\partial S}\mathbf{F}\cdot d\mathbf{r}=\iint_S(\operatorname{rot}\mathbf{F})\cdot\mathbf{n}\,dA$（半球↔平面円板で**曲面に依らない**ことを確認）
-- **ガウス発散** (3D): $\oiint_{\partial V}\mathbf{F}\cdot\mathbf{n}\,dA=\iiint_V(\operatorname{div}\mathbf{F})\,dV$
+- **ストークス** (3D): $\oint_{\partial S}\mathbf{F}\cdot d\mathbf{r}=\iint_S(\mathrm{rot}\,\mathbf{F})\cdot\mathbf{n}\,dA$（半球↔平面円板で**曲面に依らない**ことを確認）
+- **ガウス発散** (3D): $\iint_{\partial V}\mathbf{F}\cdot\mathbf{n}\,dA=\iiint_V(\mathrm{div}\,\mathbf{F})\,dV$
 - 場（回転場／動径場／混合場／変化場）・領域・サイズを切替、場の矢印と被積分量を可視化
 - いずれも一般化ストークスの定理 $\int_{\partial\Omega}\omega=\int_\Omega d\omega$ の特別な場合として提示
 
 ## 数値解法（共通方針）
 
-- 第一・第二基本形式、Christoffel 記号、$K$・$H$・$\operatorname{rot}$・$\operatorname{div}$ などの微分量はすべて**有限差分**で算出
+- 第一・第二基本形式、Christoffel 記号、$K$・$H$・$\mathrm{rot}$・$\mathrm{div}$ などの微分量はすべて**有限差分**で算出
 - 常微分方程式（測地線など）は **4 次 Runge–Kutta 法**で積分
 - 各定理は**左辺と右辺を独立に数値計算**し、数値誤差の範囲で一致することを表示
 
