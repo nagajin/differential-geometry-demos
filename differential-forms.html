@@ -163,7 +163,7 @@ function draw(){
   if(S.showDw){ const G=54, d=(2*ext)/G; let vmax=1e-9; const vals=[];
     for(let i=0;i<G;i++){ const x=-ext+(i+0.5)*d; for(let j=0;j<G;j++){ const y=-ext+(j+0.5)*d; const g=dW(x,y); vals.push(g); if(Math.abs(g)>vmax)vmax=Math.abs(g); } }
     let idx=0; ctx.globalAlpha=0.42;
-    for(let i=0;i<G;i++){ const x=-ext+(i+0.5)*d; for(let j=0;j<G;j++){ const y=-ext+(j+0.5)*d; const g=vals[idx++]; if(Math.abs(g)<vmax*1e-3 && vmax<1e-6){} const p=w2s(x,y);
+    for(let i=0;i<G;i++){ const x=-ext+(i+0.5)*d; for(let j=0;j<G;j++){ const y=-ext+(j+0.5)*d; const g=vals[idx++]; const p=w2s(x,y);
       ctx.fillStyle=colorOf(vmax>1e-9?g/vmax:0); ctx.fillRect(p[0]-d*SC/2-0.5,p[1]-d*SC/2-0.5,d*SC+1,d*SC+1); } }
     ctx.globalAlpha=1;
   }
@@ -171,7 +171,7 @@ function draw(){
   ctx.strokeStyle='rgba(255,255,255,0.12)'; ctx.lineWidth=1; const o=w2s(0,0);
   ctx.beginPath(); ctx.moveTo(0,o[1]); ctx.lineTo(r.width,o[1]); ctx.moveTo(o[0],0); ctx.lineTo(o[0],r.height); ctx.stroke();
   // 2形式の向きセル（dω の符号で反時計/時計の小ループ）
-  if(S.showCell){ const M=11, step=2*ext/M;
+  if(S.showCell){ const M=11;
     for(let i=0;i<=M;i++){ const x=-ext+2*ext*i/M; for(let j=0;j<=M;j++){ const y=-ext+2*ext*j/M; const g=dW(x,y); if(Math.abs(g)<1e-3) continue;
       const p=w2s(x,y); const rad=Math.min(13, 4+Math.abs(g)*4); const ccw=g>0;
       ctx.strokeStyle=g>0?'rgba(239,68,68,0.8)':'rgba(59,130,246,0.8)'; ctx.lineWidth=1.4;
@@ -257,7 +257,8 @@ let drag=null;
 cv.addEventListener('pointerdown',e=>{ const rect=cv.getBoundingClientRect(); const mx=e.clientX-rect.left,my=e.clientY-rect.top;
   const sp=w2s(S.P[0],S.P[1]); const tip=w2s(S.P[0]+S.V[0],S.P[1]+S.V[1]);
   const dP=Math.hypot(mx-sp[0],my-sp[1]), dT=Math.hypot(mx-tip[0],my-tip[1]);
-  if(dT<16 && dT<=dP) drag='tip'; else if(dP<16) drag='P'; else { drag='tip'; } cv.setPointerCapture(e.pointerId); onDrag(mx,my); });
+  if(dT<16 && dT<=dP) drag='tip'; else if(dP<16) drag='P'; else { drag=null; } // 両ハンドルから離れた所のクリックでは何もしない（v の誤ワープ防止）
+  if(drag){ cv.setPointerCapture(e.pointerId); onDrag(mx,my); } });
 cv.addEventListener('pointermove',e=>{ if(!drag) return; const rect=cv.getBoundingClientRect(); onDrag(e.clientX-rect.left,e.clientY-rect.top); });
 cv.addEventListener('pointerup',()=>{ drag=null; });
 function onDrag(mx,my){ const w=s2w(mx,my);
