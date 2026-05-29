@@ -117,7 +117,7 @@ function addv(a,b){return [a[0]+b[0],a[1]+b[1],a[2]+b[2]];}
 const SURFACES={
   bump:{ label:'山（グラフ）', dist:4.4, X:(u,v)=>[v, 0.95*Math.exp(-1.2*(u*u+v*v)), u], uMin:-1.3,uMax:1.3,vMin:-1.3,vMax:1.3,
     note:'グラフ曲面 z=f(x,y)。盛り上がりの頂上付近で接平面が水平、斜面で傾きます。法線は外（上）向きに扇状に開きます。' },
-  sphere:{ label:'球面の一部', dist:4.4, X:(u,v)=>{const R=1.3;return [R*Math.sin(u)*Math.cos(v), R*Math.cos(u), R*Math.sin(u)*Math.sin(v)];}, uMin:0.35,uMax:1.55,vMin:-1.1,vMax:1.1,
+  sphere:{ label:'球面の一部', dist:4.4, X:(u,v)=>{const R=1.3;return [R*Math.sin(u)*Math.sin(v), R*Math.cos(u), R*Math.sin(u)*Math.cos(v)];}, uMin:0.35,uMax:1.55,vMin:-1.1,vMax:1.1,
     note:'球面の局所パッチ。座標曲線は経線・緯線。法線は中心から外向き。曲面全体は複数パッチの貼り合わせで定義されます。' },
   cylinder:{ label:'円柱', dist:4.8, X:(u,v)=>[Math.cos(u), v, Math.sin(u)], uMin:-1.6,uMax:1.6,vMin:-1.3,vMax:1.3,
     note:'円柱。u曲線は円、v曲線は母線（直線）。接平面は曲面に沿って回転しますが、母線方向には平らです（可展面）。' },
@@ -199,10 +199,12 @@ function drawField(r){
   const NU=12,NV=12; let fmax=1e-9; const pts=[];
   for(let i=1;i<NU;i++){ const u=SF.uMin+(SF.uMax-SF.uMin)*i/NU; for(let j=1;j<NV;j++){ const v=SF.vMin+(SF.vMax-SF.vMin)*j/NV;
     const ab=fieldAB(u,v), xu=Xu(u,v), xv=Xv(u,v); const W=[ab[0]*xu[0]+ab[1]*xv[0], ab[0]*xu[1]+ab[1]*xv[1], ab[0]*xu[2]+ab[1]*xv[2]];
-    const m=norm(W); if(m>fmax)fmax=m; pts.push({p:X(u,v),W,m,nrm:normalAt(u,v)}); } }
+    const m=norm(W); if(m>fmax)fmax=m;
+    // カリング用は「幾何的な（向き反転に依存しない）法線」を使う。向き反転は黄色の法線・読み出しのみに影響させる。
+    pts.push({p:X(u,v),W,m,gn:normalize(cross(xu,xv))}); } }
   const gain=0.13*S.scale/(fmax||1);
   ctx.strokeStyle='#5ad19a'; ctx.fillStyle='#5ad19a'; ctx.lineWidth=1.6;
-  for(const o of pts){ const rn=rotate(o.nrm[0],o.nrm[1],o.nrm[2]); if(rn[2]<=-0.05) continue; // ほぼ前面のみ
+  for(const o of pts){ const rn=rotate(o.gn[0],o.gn[1],o.gn[2]); if(rn[2]<=-0.05) continue; // ほぼ前面のみ
     const a=proj(o.p,r), b=proj(addv(o.p,[o.W[0]*gain,o.W[1]*gain,o.W[2]*gain]),r); arrow(a[0],a[1],b[0],b[1],5); }
 }
 
